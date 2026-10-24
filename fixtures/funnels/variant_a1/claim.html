@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>ExampleMart — Verify Claim</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fff8f0; color: #333; margin: 0; padding: 20px; text-align: center; }
+    .card { max-width: 480px; margin: 40px auto; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 10px 25px rgba(230,81,0,0.1); border: 2px solid #ffcc80; text-align: left; }
+    h2 { color: #e65100; font-size: 20px; margin-top: 0; text-align: center; }
+    label { font-size: 13px; font-weight: 600; color: #555; display: block; margin-top: 14px; }
+    input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #ddd; border-radius: 8px; margin-top: 6px; font-size: 15px; }
+    .btn { display: block; width: 100%; box-sizing: border-box; background: #e65100; color: white; padding: 14px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; margin-top: 24px; border: none; cursor: pointer; text-align: center; }
+    .btn:hover { background: #bf360c; }
+    footer { margin-top: 32px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 16px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Step 2: Enter Delivery Details</h2>
+    <form action="pay.html" method="GET">
+      <label for="name">Full Name</label>
+      <input type="text" id="name" name="name" placeholder="Enter recipient name" required>
+
+      <label for="phone">Phone Number</label>
+      <input type="tel" id="phone" name="phone" placeholder="+91 98765 43210" required>
+
+      <label for="pincode">Delivery Pincode</label>
+      <input type="text" id="pincode" name="pincode" placeholder="110001">
+
+      <button type="submit" class="btn">Proceed to Voucher Activation &rarr;</button>
+    </form>
+    <footer>
+      Synthetic STING test funnel - not a real service. Do not pay.
+    </footer>
+  </div>
+</body>
+</html>
