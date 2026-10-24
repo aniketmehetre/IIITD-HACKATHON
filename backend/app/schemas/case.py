@@ -1,43 +1,115 @@
-"""Pydantic models for Case Management and Pipeline Status conforming to shared/api-schema.json."""
+"""Pydantic models for Case Management and Pipeline Status conforming to shared/api-schema.yaml."""
 
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+# Contract Enums
+CaseStatusType = Literal[
+    "received",
+    "intake",
+    "triage",
+    "detonating",
+    "enriching",
+    "correlating",
+    "evidencing",
+    "awaiting_approval",
+    "done",
+    "inconclusive",
+    "failed",
+]
+
+OutcomeType = Literal[
+    "confirmed_scam",
+    "likely_benign",
+    "known_payee_skipped",
+    "known_site_skipped",
+    "inconclusive",
+    "failed",
+    "payee_extracted",
+    "known_payee",
+    "known_cluster",
+]
+
 
 class CaseCreateRequest(BaseModel):
-    type: Literal["url", "message", "qr"] = "url"
-    content: str = Field(..., description="Target URL, suspicious SMS text, or base64 QR image")
+    """Payload for POST /cases."""
+
+    input_type: Literal["link", "message"] = Field(
+        ..., description="Input channel type: link or unstructured message"
+    )
+    raw_input: str = Field(
+        ...,
+        max_length=5000,
+        description="Target URL or message text lure containing URLs or UPI IDs",
+    )
+    force_detonate: bool = Field(
+        default=False,
+        description="Bypass 24-hour deduplication cache and force fresh detonation",
+    )
+
+
+class StageEvent(BaseModel):
+    """Atomic stage progress or audit log event."""
+
+    id: str = Field(..., description="Unique event ID")
+    stage: str = Field(..., description="Investigation stage")
+    message: str = Field(..., description="Human-readable event description")
+    timestamp: str = Field(..., description="ISO 8601 UTC timestamp")
+    level: Optional[str] = Field(default="info", description="info | warning | error")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class CaseSummary(BaseModel):
+    """Compact summary of an investigation case for listings and intake responses."""
+
     id: str
-    type: str
-    target: str
-    status: Literal["queued", "processing", "completed", "failed"]
-    current_stage: Literal["intake", "triage", "detonate", "enrich", "cluster", "act", "complete"]
+    input_type: str
+    raw_input: str
+    status: str
+    outcome: Optional[str] = None
     created_at: str
+    updated_at: Optional[str] = None
+    is_seed: bool = False
+    deduplicated: bool = False
 
 
-class TraceEvent(BaseModel):
-    stage: str
-    agent: str
-    message: str
-    timestamp: str
-    details: Optional[Dict[str, Any]] = None
+class CaseDetail(BaseModel):
+    """Full investigation case schema including live streaming URL and recent events."""
 
-
-class CaseStatusResponse(BaseModel):
     id: str
-    status: Literal["queued", "processing", "completed", "failed"]
-    current_stage: Literal["intake", "triage", "detonate", "enrich", "cluster", "act", "complete"]
-    progress_pct: int = Field(ge=0, le=100)
-    active_agent: Optional[str] = None
-    trace_events: List[TraceEvent] = Field(default_factory=list)
+    input_type: str
+    raw_input: str
+    status: str
+    outcome: Optional[str] = None
+    streaming_url: Optional[str] = None
+    recent_events: List[StageEvent] = Field(default_factory=list)
+    created_at: str
     updated_at: str
 
 
+class CaseListResponse(BaseModel):
+    """Paginated case listing response."""
+
+    items: List[CaseSummary]
+    total: int
+    next_cursor: Optional[str] = None
+
+
+class CaseEventsResponse(BaseModel):
+    """Incremental event polling response."""
+
+    events: List[StageEvent]
+
+
+class ErrorResponse(BaseModel):
+    """Standard typed API error response."""
+
+    detail: str
+    code: Optional[str] = None
+
+
+# Legacy / Additional helpers for contract compatibility
 class PayeeInfo(BaseModel):
     id: str
     vpa: Optional[str] = None
@@ -99,3 +171,8 @@ class HealthResponse(BaseModel):
     status: Literal["healthy", "degraded", "unhealthy"]
     version: str
     services: ServiceHealth
+
+
+# Aliases
+TraceEvent = StageEvent
+CaseResponse = CaseDetail

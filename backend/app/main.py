@@ -57,6 +57,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "version": APP_VERSION,
         }
 
+    try:
+        from app.routers.cases import router as cases_router
+    except ImportError:
+        from backend.app.routers.cases import router as cases_router
+
+    app.include_router(cases_router)
+
     return app
 
 

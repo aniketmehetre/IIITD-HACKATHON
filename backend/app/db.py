@@ -11,25 +11,29 @@ from sqlalchemy.ext.asyncio import (
 
 from app.config import get_settings
 
+_engines: dict[str, tuple[AsyncEngine, async_sessionmaker[AsyncSession]]] = {}
+
 
 def create_engine_and_session(
     database_url: str | None = None,
 ) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
-    """Create async SQLAlchemy engine and session factory."""
+    """Create or retrieve cached async SQLAlchemy engine and session factory."""
     url = database_url or get_settings().DATABASE_URL
-    engine = create_async_engine(
-        url,
-        echo=False,
-        future=True,
-    )
-    session_factory = async_sessionmaker(
-        bind=engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-    return engine, session_factory
+    if url not in _engines:
+        engine = create_async_engine(
+            url,
+            echo=False,
+            future=True,
+        )
+        session_factory = async_sessionmaker(
+            bind=engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
+        _engines[url] = (engine, session_factory)
+    return _engines[url]
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
