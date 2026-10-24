@@ -24,6 +24,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = app.state.settings
     # Ensure local storage directory exists using pathlib
     settings.STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Section 5: Restart recovery for interrupted or stuck pipeline cases
+    try:
+        from app.pipeline import resume_incomplete_cases
+
+        await resume_incomplete_cases()
+    except Exception:
+        pass
+
     yield
 
 
