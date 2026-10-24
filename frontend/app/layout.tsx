@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import React from "react";
 import "./globals.css";
+import { LenisProvider } from "@/components/LenisProvider";
 
 export const metadata: Metadata = {
   title: "STING — Autonomous Cyber Threat Intelligence & Takedown Platform",
@@ -25,9 +26,11 @@ export default function RootLayout({
       <body>
         <div className="cyber-bg" aria-hidden="true" />
         <div className="cyber-grid-dots" aria-hidden="true" />
-        <main style={{ position: "relative", zIndex: 1, minHeight: "100vh" }}>
-          {children}
-        </main>
+        <LenisProvider>
+          <div style={{ position: "relative", zIndex: 1, minHeight: "100vh" }}>
+            {children}
+          </div>
+        </LenisProvider>
       </body>
     </html>
   );
