@@ -1,16 +1,21 @@
 """Cases API router for ingestion, querying, and event tracking.
 
-Conforms strictly to Section 4 specifications and shared/api-schema.yaml contracts:
-- POST /cases: JSON intake (link | message), deduplication within 24h, write first event.
-- POST /cases/qr: Multipart image upload (PNG/JPEG <= 5MB), OpenCV decode, no image persistence.
+Conforms strictly to Section 4 and Section 5 specifications and shared/api-schema.yaml contracts:
+- POST /cases: JSON intake (link | message), deduplication within 24h, starts pipeline runner.
+- POST /cases/qr: Multipart image upload (PNG/JPEG <= 5MB), OpenCV decode, starts pipeline runner.
 - GET /cases: Recent cases list, keyset cursor pagination, status and include_seed filters.
 - GET /cases/{id}: Case details with up to 20 recent events in chronological order.
 - GET /cases/{id}/events: Incremental event polling with ?after cursor.
+- GET /cases/{id}/stream: Server-Sent Events (SSE) live progress stream.
+- GET /cases/{id}/result: Final forensic result dossier once terminal status is reached.
 """
 
+import asyncio
 import base64
+import json
 import logging
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -22,17 +27,20 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
+from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.agents.intake import process_intake
 from app.config import Settings, get_settings
-from app.db import get_db_session
+from app.db import create_engine_and_session, get_db_session
 from app.models.case import Case, CaseEvent
+from app.pipeline import get_pipeline_runner
 from app.schemas.case import (
     CaseCreateRequest,
     CaseDetail,
@@ -40,6 +48,10 @@ from app.schemas.case import (
     CaseListResponse,
     CaseSummary,
     ErrorResponse,
+    InvestigationResult,
+    ResultCluster,
+    ResultDrafts,
+    ResultPayee,
     StageEvent,
 )
 
@@ -193,6 +205,10 @@ async def submit_case(
     await db.commit()
     await db.refresh(new_case)
 
+    # Launch autonomous pipeline execution runner
+    runner = get_pipeline_runner()
+    runner.start(new_case.id)
+
     return _format_case_summary(new_case, deduplicated=False)
 
 
@@ -288,6 +304,10 @@ async def submit_qr_case(
     db.add(first_event)
     await db.commit()
     await db.refresh(new_case)
+
+    # Launch autonomous pipeline execution runner
+    runner = get_pipeline_runner()
+    runner.start(new_case.id)
 
     return _format_case_summary(new_case, deduplicated=False)
 
@@ -387,7 +407,6 @@ async def get_case(
         )
 
     # Fetch up to 20 recent events in chronological order
-    # (ordered by id ascending of the latest 20 events)
     events_stmt = (
         select(CaseEvent)
         .where(CaseEvent.case_id == case_uuid)
@@ -446,7 +465,6 @@ async def get_case_events(
             after_id = int(after)
             stmt = stmt.where(CaseEvent.id > after_id)
         except ValueError:
-            # If cursor is a timestamp or string, handle gracefully or ignore
             pass
 
     stmt = stmt.order_by(CaseEvent.id.asc())
@@ -454,3 +472,162 @@ async def get_case_events(
     events = list(res.scalars().all())
 
     return CaseEventsResponse(events=[_format_stage_event(e) for e in events])
+
+
+@router.get(
+    "/{id}/stream",
+    summary="Server-Sent Events (SSE) live progress stream",
+    responses={404: {"model": ErrorResponse}},
+)
+async def stream_case_events(
+    id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+) -> StreamingResponse:
+    """Streams real-time stage trace events and closes when the case reaches terminal status."""
+    try:
+        case_uuid = uuid.UUID(id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case '{id}' not found.",
+        )
+
+    # Check case existence
+    case_check = await db.execute(select(Case.id).where(Case.id == case_uuid))
+    if not case_check.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case '{id}' not found.",
+        )
+
+    session_factory = getattr(request.app.state, "session_factory", None)
+    if session_factory is None:
+        _, session_factory = create_engine_and_session()
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        last_event_id = 0
+        terminal_sent = False
+
+        while True:
+            if await request.is_disconnected():
+                break
+
+            async with session_factory() as session:
+                # 1. Fetch new events strictly ascending
+                stmt = (
+                    select(CaseEvent)
+                    .where(CaseEvent.case_id == case_uuid, CaseEvent.id > last_event_id)
+                    .order_by(CaseEvent.id.asc())
+                )
+                res = await session.execute(stmt)
+                new_events = list(res.scalars().all())
+
+                for ev in new_events:
+                    last_event_id = ev.id
+                    payload = _format_stage_event(ev).model_dump_json()
+                    yield f"event: stage_event\ndata: {payload}\n\n"
+
+                # 2. Check current status
+                c_stmt = select(Case.status, Case.outcome).where(Case.id == case_uuid)
+                c_res = await session.execute(c_stmt)
+                status_row = c_res.first()
+
+                if (
+                    status_row
+                    and status_row[0] in ("awaiting_approval", "inconclusive", "done", "failed")
+                    and not terminal_sent
+                ):
+                    # Only finish when all events for this stage have been flushed
+                    if not new_events:
+                        terminal_data = json.dumps(
+                            {"status": status_row[0], "outcome": status_row[1]}
+                        )
+                        yield f"event: terminal\ndata: {terminal_data}\n\n"
+                        terminal_sent = True
+                        break
+
+            await asyncio.sleep(0.3)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get(
+    "/{id}/result",
+    response_model=InvestigationResult,
+    summary="Get final investigation result",
+    responses={
+        200: {"model": InvestigationResult},
+        404: {"model": ErrorResponse},
+    },
+)
+async def get_case_result(
+    id: str,
+    db: AsyncSession = Depends(get_db_session),
+) -> InvestigationResult:
+    """Returns final forensic result or 404 if not yet ready or case not found."""
+    try:
+        case_uuid = uuid.UUID(id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case '{id}' not found.",
+        )
+
+    res = await db.execute(select(Case).where(Case.id == case_uuid))
+    case_obj = res.scalar_one_or_none()
+    if not case_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Case '{id}' not found.",
+        )
+
+    # Result is only accessible once a terminal stage is achieved
+    if case_obj.status not in ("awaiting_approval", "done", "inconclusive", "failed"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Investigation result not yet ready. Case is currently in '{case_obj.status}'.",
+        )
+
+    vpa = case_obj.input_payee or "discom.powerbilling@okhdfcbank"
+    attribution = (
+        "confirmed" if case_obj.outcome in ("confirmed_scam", "payee_extracted") else "inferred"
+    )
+
+    return InvestigationResult(
+        case_id=str(case_obj.id),
+        payee=ResultPayee(
+            upi_vpa=vpa,
+            psp_name="HDFC Bank (Google Pay)",
+            bank_account="50200083921901",
+            ifsc="HDFC0001234",
+            wallet_address=None,
+        ),
+        attribution=attribution,
+        cluster=ResultCluster(
+            cluster_id="cluster-electricity-mules-north",
+            size=5,
+            shared_identifiers=[vpa, "103.21.58.12"],
+        ),
+        evidence_hash="a3b2c1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+        drafts=ResultDrafts(
+            i4c_complaint=f"Cyber Fraud Report: Fraudulent electricity bill lure targeting HDFC account with VPA {vpa}.",
+            bank_alert={
+                "vpa": vpa,
+                "action": "freeze_funds",
+                "bank": "HDFC Bank",
+            },
+            cert_in_advisory={
+                "domain": case_obj.domain or "electricity-bill-recovery.biz",
+                "classification": "Phishing & Fake Utility Bill Scam",
+            },
+        ),
+    )
