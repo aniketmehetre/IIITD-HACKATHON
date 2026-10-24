@@ -5,6 +5,7 @@ import { Navbar, ViewMode } from "@/components/Navbar";
 import { StageProgressRail } from "@/components/StageProgressRail";
 import { CaseSubmissionBar } from "@/components/CaseSubmissionBar";
 import { IntakeStagePanel } from "@/components/stages/IntakeStagePanel";
+import { TriageStagePanel } from "@/components/stages/TriageStagePanel";
 import { api } from "@/lib/api";
 import { CaseSummary, InputType, PipelineStage } from "@/lib/types";
 import { 
@@ -104,48 +105,7 @@ export default function Home() {
               {activeCase && <IntakeStagePanel caseData={activeCase} />}
 
               {/* STAGE 2: TRIAGE */}
-              <section id="stage-triage" className="glass-panel" style={{ padding: "28px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "var(--accent-cyan-dim)", border: "1px solid var(--border-cyan)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Radar size={18} color="var(--accent-cyan)" />
-                    </div>
-                    <div>
-                      <h3 className="font-display" style={{ fontSize: "18px" }}>Stage 02: Triage & Fingerprinting</h3>
-                      <p className="text-muted font-mono" style={{ fontSize: "12px" }}>RDAP, WHOIS and Brand Collision Check</p>
-                    </div>
-                  </div>
-                  <span className={`cyber-badge ${activeCase?.result?.triage.verdict === 'HIGH_RISK' ? 'cyber-badge-red' : 'cyber-badge-green'}`}>
-                    {activeCase?.result?.triage.verdict || "ANALYZED"}
-                  </span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
-                  <div className="glass-panel" style={{ padding: "14px" }}>
-                    <span className="text-muted font-mono" style={{ fontSize: "11px" }}>DOMAIN AGE</span>
-                    <p className="font-display" style={{ fontSize: "20px", color: (activeCase?.result?.triage.domain_age_days ?? 0) < 30 ? "var(--accent-red)" : "var(--accent-green)" }}>
-                      {activeCase?.result?.triage.domain_age_days ?? "--"} Days
-                    </p>
-                  </div>
-                  <div className="glass-panel" style={{ padding: "14px" }}>
-                    <span className="text-muted font-mono" style={{ fontSize: "11px" }}>REGISTRAR</span>
-                    <p className="font-mono" style={{ fontSize: "14px", color: "var(--text-primary)" }}>
-                      {activeCase?.result?.triage.registrar || "NameCheap"}
-                    </p>
-                  </div>
-                  <div className="glass-panel" style={{ padding: "14px" }}>
-                    <span className="text-muted font-mono" style={{ fontSize: "11px" }}>CLAIMED BRAND</span>
-                    <p className="font-mono text-cyan" style={{ fontSize: "14px" }}>
-                      {activeCase?.result?.triage.claimed_brand || "N/A"}
-                    </p>
-                  </div>
-                  <div className="glass-panel" style={{ padding: "14px" }}>
-                    <span className="text-muted font-mono" style={{ fontSize: "11px" }}>DETONATION GATE</span>
-                    <p className="font-mono font-bold" style={{ fontSize: "14px", color: activeCase?.result?.triage.should_detonate ? "var(--accent-red)" : "var(--accent-green)" }}>
-                      {activeCase?.result?.triage.should_detonate ? "DETONATE (HIGH RISK)" : "SKIP (BENIGN/KNOWN)"}
-                    </p>
-                  </div>
-                </div>
-              </section>
+              {activeCase && <TriageStagePanel caseData={activeCase} />}
 
               {/* STAGE 3: DETONATE (Preview for Section 6) */}
               <section id="stage-detonate" className="glass-panel-cyan" style={{ padding: "28px" }}>
