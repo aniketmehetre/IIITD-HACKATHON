@@ -20,8 +20,12 @@ from typing import Any, Callable, Coroutine, Optional, Protocol
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.decision import DecisionResult, StubClusterLookup, decide
+from app.agents.fingerprint import Fingerprint
+from app.agents.triage import TriageResult, run_triage
 from app.config import get_settings
 from app.db import create_engine_and_session
+from app.integrations.tinyfish import TinyFishClient
 from app.models.case import Case, CaseEvent
 
 logger = logging.getLogger(__name__)
@@ -74,19 +78,38 @@ async def stage_intake(ctx: StageContext) -> StageResult:
 
 
 async def stage_triage(ctx: StageContext) -> StageResult:
-    """Triage stage: extracts free signals, RDAP, and brand mismatch.
+    """Triage stage: extracts free signals, RDAP, brand mismatch, and fingerprint."""
+    url = ctx.case.normalized_url or ctx.case.raw_input
 
-    # STUB(s06)
-    """
+    # Run free-tier triage
+    triage_res = await run_triage(
+        url=url,
+        tinyfish_client=TinyFishClient(),
+    )
+
+    # Record each forensic signal as an individual CaseEvent
+    for sig in triage_res.signals:
+        ctx.db.add(
+            CaseEvent(
+                case_id=ctx.case.id,
+                stage="triage",
+                kind="signal",
+                message=f"Signal [{sig.group}]: {sig.name} ({sig.strength}) - {sig.description}",
+                data={
+                    "name": sig.name,
+                    "value": sig.value,
+                    "strength": sig.strength,
+                    "group": sig.group,
+                    "description": sig.description,
+                },
+            )
+        )
+
     return StageResult(
         next_stage="decide",
         data={
-            "stub": True,
-            "stage": "triage",
-            "domain_age_days": 4,
-            "brand_claimed": "ExampleMart",
-            "urgency_detected": True,
-            "triage_score": 85,
+            "stub": False,
+            "triage": triage_res.to_dict(),
         },
     )
 
@@ -95,61 +118,121 @@ async def stage_decide(ctx: StageContext) -> StageResult:
     """Decision logic: routes between paid detonation, skips, or inconclusive."""
     raw = (ctx.case.raw_input or "").lower()
 
-    # Branch 1: SKIP_KNOWN_PAYEE (Payee already known/extracted)
+    # Look for triage event data from prior stage
+    stmt = (
+        select(CaseEvent)
+        .where(CaseEvent.case_id == ctx.case.id, CaseEvent.stage == "triage")
+        .order_by(CaseEvent.id.desc())
+    )
+    res = await ctx.db.execute(stmt)
+    triage_events = res.scalars().all()
+    triage_data = None
+    for ev in triage_events:
+        if ev.data and "triage" in ev.data:
+            triage_data = ev.data["triage"]
+            break
+
+    # Branch flags support for simulated fast tests
     if "#branch:skip_payee" in raw or ctx.case.input_payee == "KNOWN_PAYEE":
-        return StageResult(
+        decision_res = DecisionResult(
+            decision="SKIP_KNOWN_PAYEE",
             next_stage="enrichment",
             outcome="known_payee_skipped",
-            data={
-                "stub": True,
-                "decision": "SKIP_KNOWN_PAYEE",
-                "reason": "Payment destination VPA already known in intelligence graph.",
-            },
+            attribution="confirmed",
+            reasoning=["Payment destination VPA already known in intelligence graph."],
         )
-
-    # Branch 2: SKIP_KNOWN_SITE (Domain seen recently with confirmed payee)
-    if "#branch:skip_site" in raw:
-        return StageResult(
+    elif "#branch:skip_site" in raw:
+        decision_res = DecisionResult(
+            decision="SKIP_KNOWN_SITE",
             next_stage="enrichment",
             outcome="known_site_skipped",
-            data={
-                "stub": True,
-                "decision": "SKIP_KNOWN_SITE",
-                "reason": "Domain analyzed recently with active verified attribution.",
-            },
+            attribution="confirmed",
+            reasoning=["Domain analyzed recently with active verified attribution."],
         )
-
-    # Branch 3: SKIP_KNOWN_CLUSTER (Strong fingerprint cluster match)
-    if "#branch:skip_cluster" in raw:
-        return StageResult(
+    elif "#branch:skip_cluster" in raw:
+        decision_res = DecisionResult(
+            decision="SKIP_KNOWN_CLUSTER",
             next_stage="enrichment",
             outcome="known_cluster_skipped",
-            data={
-                "stub": True,
-                "decision": "SKIP_KNOWN_CLUSTER",
-                "reason": "High-confidence visual and DOM fingerprint match to active cluster.",
-            },
+            attribution="inferred",
+            needs_verification=True,
+            reasoning=["High-confidence visual and DOM fingerprint match to active cluster."],
         )
-
-    # Branch 4: INCONCLUSIVE (Benign / no threat indicators discovered)
-    if "#branch:inconclusive" in raw:
-        return StageResult(
+    elif "#branch:inconclusive" in raw:
+        decision_res = DecisionResult(
+            decision="INCONCLUSIVE",
             next_stage="inconclusive",
             outcome="inconclusive",
-            data={
-                "stub": True,
-                "decision": "INCONCLUSIVE",
-                "reason": "Domain displays no urgency, payment lures, or brand impersonation.",
-            },
+            reasoning=["Domain displays no urgency, payment lures, or brand impersonation."],
+        )
+    else:
+        # Reconstruct TriageResult from triage event or execute triage
+        if triage_data:
+            fp_d = triage_data.get("fingerprint", {})
+            fp = Fingerprint(
+                text_simhash=fp_d.get("text_simhash", 0),
+                form_action_domains=fp_d.get("form_action_domains", []),
+                script_hosts=fp_d.get("script_hosts", []),
+                registrar=fp_d.get("registrar"),
+                nameservers=fp_d.get("nameservers", []),
+                creation_week=fp_d.get("creation_week"),
+                normalized_title_hash=fp_d.get("normalized_title_hash", ""),
+            )
+            triage = TriageResult(
+                url=triage_data.get("url", ctx.case.normalized_url or ""),
+                domain=triage_data.get("domain", ctx.case.domain or ""),
+                signals=[],
+                fingerprint=fp,
+                risk_level=triage_data.get("risk_level", "medium"),
+                reasoning=triage_data.get("reasoning", []),
+                domain_age_days=triage_data.get("domain_age_days"),
+                brand_mismatch=triage_data.get("brand_mismatch", False),
+                brand_claimed=triage_data.get("brand_claimed"),
+                payment_indicators_found=triage_data.get("payment_indicators", []),
+                urgency_phrases_found=triage_data.get("urgency_phrases", []),
+                search_scam_mentions=triage_data.get("search_scam_mentions", 0),
+                fetch_error=triage_data.get("fetch_error"),
+            )
+        else:
+            triage = await run_triage(
+                url=ctx.case.normalized_url or ctx.case.raw_input,
+                tinyfish_client=TinyFishClient(),
+            )
+
+        decision_res = decide(
+            triage=triage,
+            cluster_lookup=StubClusterLookup(),
+            input_payee=ctx.case.input_payee,
+            force_detonate=ctx.case.force_detonate,
         )
 
-    # Default Branch: DETONATE (Paid TinyFish Agent walk)
+    # Record decision reasoning event
+    for reason in decision_res.reasoning:
+        ctx.db.add(
+            CaseEvent(
+                case_id=ctx.case.id,
+                stage="decide",
+                kind="decision_rule",
+                message=f"Decision [{decision_res.decision}]: {reason}",
+                data={
+                    "decision": decision_res.decision,
+                    "reason": reason,
+                    "attribution": decision_res.attribution,
+                    "needs_verification": decision_res.needs_verification,
+                },
+            )
+        )
+
     return StageResult(
-        next_stage="detonation",
+        next_stage=decision_res.next_stage,
+        outcome=decision_res.outcome,
         data={
-            "stub": True,
-            "decision": "DETONATE",
-            "reason": "High risk score with active payment indicators; full detonation warranted.",
+            "stub": False,
+            "decision": decision_res.decision,
+            "reasoning": decision_res.reasoning,
+            "attribution": decision_res.attribution,
+            "needs_verification": decision_res.needs_verification,
+            "carried_over_data": decision_res.carried_over_data,
         },
     )
 
