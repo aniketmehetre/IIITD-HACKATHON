@@ -1,0 +1,150 @@
+# Source: National Payments Corporation of India (NPCI) - List of 3rd Party UPI Applications & PSP Banks
+# Reference URL: https://www.npci.org.in/what-we-do/upi/3rd-party-apps
+# Compiled Date: October 2026
+# Notice: Any handle suffix not present in this official mapping table must resolve to "Unknown".
+# Do not guess or extrapolate unverified handle mappings from memory.
+
+handles:
+  # Google Pay (Alphabet / NPCI Partner Banks)
+  "@okhdfcbank":
+    psp_name: "Google Pay"
+    sponsor_bank: "HDFC Bank"
+    bank_code: "HDFC"
+  "@okaxis":
+    psp_name: "Google Pay"
+    sponsor_bank: "Axis Bank"
+    bank_code: "UTIB"
+  "@oksbi":
+    psp_name: "Google Pay"
+    sponsor_bank: "State Bank of India"
+    bank_code: "SBIN"
+  "@okicici":
+    psp_name: "Google Pay"
+    sponsor_bank: "ICICI Bank"
+    bank_code: "ICIC"
+
+  # PhonePe (Walmart / NPCI Partner Banks)
+  "@ybl":
+    psp_name: "PhonePe"
+    sponsor_bank: "Yes Bank"
+    bank_code: "YESB"
+  "@ibl":
+    psp_name: "PhonePe"
+    sponsor_bank: "ICICI Bank"
+    bank_code: "ICIC"
+  "@axl":
+    psp_name: "PhonePe"
+    sponsor_bank: "Axis Bank"
+    bank_code: "UTIB"
+
+  # Paytm (One97 Communications / Partner Banks)
+  "@paytm":
+    psp_name: "Paytm Payments Bank"
+    sponsor_bank: "Paytm Payments Bank"
+    bank_code: "PYTM"
+  "@ptsbi":
+    psp_name: "Paytm"
+    sponsor_bank: "State Bank of India"
+    bank_code: "SBIN"
+  "@pthdfc":
+    psp_name: "Paytm"
+    sponsor_bank: "HDFC Bank"
+    bank_code: "HDFC"
+  "@ptaxis":
+    psp_name: "Paytm"
+    sponsor_bank: "Axis Bank"
+    bank_code: "UTIB"
+  "@ptyes":
+    psp_name: "Paytm"
+    sponsor_bank: "Yes Bank"
+    bank_code: "YESB"
+
+  # Amazon Pay (Amazon / Partner Banks)
+  "@apl":
+    psp_name: "Amazon Pay"
+    sponsor_bank: "Axis Bank"
+    bank_code: "UTIB"
+  "@rapl":
+    psp_name: "Amazon Pay"
+    sponsor_bank: "RBL Bank"
+    bank_code: "RATN"
+
+  # WhatsApp Pay
+  "@waaxis":
+    psp_name: "WhatsApp Pay"
+    sponsor_bank: "Axis Bank"
+    bank_code: "UTIB"
+  "@wahdfc":
+    psp_name: "WhatsApp Pay"
+    sponsor_bank: "HDFC Bank"
+    bank_code: "HDFC"
+  "@wasbi":
+    psp_name: "WhatsApp Pay"
+    sponsor_bank: "State Bank of India"
+    bank_code: "SBIN"
+  "@waicici":
+    psp_name: "WhatsApp Pay"
+    sponsor_bank: "ICICI Bank"
+    bank_code: "ICIC"
+
+  # NPCI Reference App
+  "@upi":
+    psp_name: "BHIM"
+    sponsor_bank: "NPCI / Central Switch"
+    bank_code: "NPCI"
+
+  # Native Bank UPI Apps
+  "@sbi":
+    psp_name: "BHIM SBI Pay"
+    sponsor_bank: "State Bank of India"
+    bank_code: "SBIN"
+  "@hdfcbank":
+    psp_name: "HDFC Mobile Banking"
+    sponsor_bank: "HDFC Bank"
+    bank_code: "HDFC"
+  "@icici":
+    psp_name: "iMobile Pay"
+    sponsor_bank: "ICICI Bank"
+    bank_code: "ICIC"
+  "@axisbank":
+    psp_name: "Axis Mobile"
+    sponsor_bank: "Axis Bank"
+    bank_code: "UTIB"
+  "@kotak":
+    psp_name: "Kotak 811"
+    sponsor_bank: "Kotak Mahindra Bank"
+    bank_code: "KKBK"
+  "@indus":
+    psp_name: "IndusMobile"
+    sponsor_bank: "IndusInd Bank"
+    bank_code: "INDB"
+  "@barodampay":
+    psp_name: "bob World UPI"
+    sponsor_bank: "Bank of Baroda"
+    bank_code: "BARB"
+  "@pnb":
+    psp_name: "PNB ONE"
+    sponsor_bank: "Punjab National Bank"
+    bank_code: "PUNB"
+  "@cnrb":
+    psp_name: "Canara ai1"
+    sponsor_bank: "Canara Bank"
+    bank_code: "CNRB"
+  "@federal":
+    psp_name: "FedMobile"
+    sponsor_bank: "Federal Bank"
+    bank_code: "FDRL"
+  "@idbi":
+    psp_name: "IDBI Pay"
+    sponsor_bank: "IDBI Bank"
+    bank_code: "IBKL"
+  "@unionbank":
+    psp_name: "Vyom"
+    sponsor_bank: "Union Bank of India"
+    bank_code: "UBIN"
+
+  # Synthetic Test PSP for Benchmarks and Safe Sandboxing
+  "@stingtest":
+    psp_name: "STING Test PSP (synthetic)"
+    sponsor_bank: "STING Synthetic Reserve Bank"
+    bank_code: "STNG"

@@ -133,8 +133,12 @@ async def run_triage(
     html_content = html_override or ""
     if not html_content and tinyfish_client:
         try:
-            fetch_res = await tinyfish_client.fetch([url], output_format="html")
-            if fetch_res and isinstance(fetch_res, list) and len(fetch_res) > 0:
+            fetch_res = await tinyfish_client.fetch([url], format="html")
+            if isinstance(fetch_res, dict) and "results" in fetch_res:
+                results_list = fetch_res.get("results") or []
+                if results_list and isinstance(results_list, list):
+                    html_content = results_list[0].get("html") or results_list[0].get("content") or ""
+            elif isinstance(fetch_res, list) and len(fetch_res) > 0:
                 html_content = fetch_res[0].get("html") or fetch_res[0].get("content") or ""
         except Exception as exc:
             fetch_error = f"Fetch failed: {exc}"

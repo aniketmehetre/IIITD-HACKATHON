@@ -100,6 +100,18 @@ class Case(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Detonation, enrichment and evidence artifacts
+    agent_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    proxy_fallback: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    detonation_result: Mapped[dict[str, Any] | None] = mapped_column(UniversalJSON, nullable=True)
+    enrichment_result: Mapped[dict[str, Any] | None] = mapped_column(UniversalJSON, nullable=True)
+    evidence_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evidence_link: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    bundle_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    report_drafts: Mapped[dict[str, Any] | None] = mapped_column(UniversalJSON, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False, index=True
     )
@@ -146,3 +158,23 @@ class CaseEvent(Base):
     data: Mapped[dict[str, Any]] = mapped_column(UniversalJSON, default=dict, nullable=False)
 
     case: Mapped["Case"] = relationship("Case", back_populates="events")
+
+
+class UsageLedger(Base):
+    """Tracks credit consumption and agent/browser runs for budget enforcement."""
+
+    __tablename__ = "usage_ledger"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)  # agent | browser
+    case_id: Mapped[uuid.UUID | None] = mapped_column(UniversalUUID, nullable=True, index=True)
+    run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    credits_hint: Mapped[float] = mapped_column(default=1.0, nullable=False)
+

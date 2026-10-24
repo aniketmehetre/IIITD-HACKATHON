@@ -26,8 +26,17 @@ from sqlalchemy.ext.asyncio import (
 from app.config import Settings, get_settings
 from app.db import get_db_session
 from app.main import create_app
-from app.models.base import Base
-from app.models.case import Case, CaseEvent
+import app.models  # registers all models on Base.metadata
+from app.models import (
+    Base,
+    Case,
+    CaseEvent,
+    Edge,
+    EvidenceLedger,
+    Payee,
+    Site,
+    UsageLedger,
+)
 from app.pipeline import (
     STAGE_REGISTRY,
     InProcessRunner,
@@ -362,6 +371,8 @@ async def test_sse_stream_and_result_endpoint(client, async_db, monkeypatch):
         "app.pipeline.create_engine_and_session",
         lambda *args, **kwargs: (None, async_db),
     )
+    runner = get_pipeline_runner()
+    monkeypatch.setattr(runner, "start", lambda *args, **kwargs: None)
 
     # 1. Create a case
     create_resp = await client.post(

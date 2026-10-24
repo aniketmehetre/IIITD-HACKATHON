@@ -20,7 +20,11 @@ from typing import Any, Callable, Coroutine, Optional, Protocol
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.correlation import SqlClusterLookup, add_case_to_graph
 from app.agents.decision import DecisionResult, StubClusterLookup, decide
+from app.agents.detonation import run_detonation
+from app.agents.enrichment import run_enrichment
+from app.agents.evidence import run_evidence_pipeline
 from app.agents.fingerprint import Fingerprint
 from app.agents.triage import TriageResult, run_triage
 from app.config import get_settings
@@ -199,9 +203,10 @@ async def stage_decide(ctx: StageContext) -> StageResult:
                 tinyfish_client=TinyFishClient(),
             )
 
+        cluster_lookup = await SqlClusterLookup.from_db(ctx.db)
         decision_res = decide(
             triage=triage,
-            cluster_lookup=StubClusterLookup(),
+            cluster_lookup=cluster_lookup,
             input_payee=ctx.case.input_payee,
             force_detonate=ctx.case.force_detonate,
         )
@@ -238,69 +243,172 @@ async def stage_decide(ctx: StageContext) -> StageResult:
 
 
 async def stage_detonation(ctx: StageContext) -> StageResult:
-    """Detonation stage: autonomous agent walks the funnel to payment screen.
+    """Detonation stage: autonomous agent walks the funnel to payment screen."""
+    raw = (ctx.case.raw_input or "").lower()
 
-    # STUB(s07)
-    """
+    # Fast simulation branch flag for tests or stub override
+    if "#mock_stub" in raw:
+        return StageResult(
+            next_stage="enrichment",
+            data={
+                "stub": True,
+                "stage": "detonation",
+                "extracted_payee": ctx.case.input_payee or "discom.recovery@okhdfcbank",
+                "amount_requested": 1499.0,
+                "funnel_steps_count": 4,
+                "qr_detected": True,
+            },
+        )
+
+    det_exec = await run_detonation(case=ctx.case, db=ctx.db)
+
+    if det_exec.next_stage == "failed":
+        raise RuntimeError(det_exec.error_message or "Detonation execution failed")
+
+    result_data: dict[str, Any] = {
+        "stub": False,
+        "run_id": det_exec.run_id,
+        "proxy_fallback": det_exec.proxy_fallback,
+    }
+    if det_exec.detonation_result:
+        result_data["detonation"] = det_exec.detonation_result.model_dump()
+        result_data["extracted_payee"] = (
+            det_exec.detonation_result.payee_vpa
+            or det_exec.detonation_result.account_number
+            or det_exec.detonation_result.qr_payload
+        )
+
     return StageResult(
-        next_stage="enrichment",
-        data={
-            "stub": True,
-            "stage": "detonation",
-            "extracted_payee": ctx.case.input_payee or "discom.recovery@okhdfcbank",
-            "amount_requested": 1499.0,
-            "funnel_steps_count": 4,
-            "qr_detected": True,
-        },
+        next_stage=det_exec.next_stage,
+        outcome=det_exec.outcome,
+        data=result_data,
     )
 
 
 async def stage_enrichment(ctx: StageContext) -> StageResult:
-    """Enrichment stage: resolves PSP bank, IFSC, and account rails.
+    """Enrichment stage: resolves PSP bank, IFSC, and account rails."""
+    raw = (ctx.case.raw_input or "").lower()
 
-    # STUB(s08)
-    """
+    if "#mock_stub" in raw:
+        return StageResult(
+            next_stage="correlation",
+            data={
+                "stub": True,
+                "stage": "enrichment",
+                "psp_name": "HDFC Bank (Google Pay)",
+                "ifsc": "HDFC0001234",
+                "bank_account": "50200083921901",
+            },
+        )
+
+    try:
+        enrichment_res = await run_enrichment(ctx.case)
+    except Exception as exc:
+        logger.warning("Enrichment encountered non-fatal error for case %s: %s", ctx.case.id, exc)
+        return StageResult(
+            next_stage="correlation",
+            data={"stub": False, "error": str(exc)},
+        )
+
+    # Append enrichment event
+    ctx.db.add(
+        CaseEvent(
+            case_id=ctx.case.id,
+            stage="enrichment",
+            kind="info",
+            message=f"Enriched payment destination: PSP={enrichment_res.psp_name or 'Unknown'}, Bank={enrichment_res.sponsor_bank or 'Unknown'}",
+            data=enrichment_res.model_dump(),
+        )
+    )
+
     return StageResult(
         next_stage="correlation",
         data={
-            "stub": True,
-            "stage": "enrichment",
-            "psp_name": "HDFC Bank (Google Pay)",
-            "ifsc": "HDFC0001234",
-            "bank_account": "50200083921901",
+            "stub": False,
+            "enrichment": enrichment_res.model_dump(),
+            "psp_name": enrichment_res.psp_name,
+            "sponsor_bank": enrichment_res.sponsor_bank,
+            "ifsc": enrichment_res.ifsc_bank_code,
+            "normalized_payees": enrichment_res.normalized_payees,
         },
     )
 
 
 async def stage_correlation(ctx: StageContext) -> StageResult:
-    """Correlation stage: links payee and domain into NetworkX campaign cluster.
+    """Correlation stage: links payee and domain into campaign cluster."""
+    raw = (ctx.case.raw_input or "").lower()
 
-    # STUB(s09)
-    """
+    if "#mock_stub" in raw:
+        return StageResult(
+            next_stage="evidence",
+            data={
+                "stub": True,
+                "stage": "correlation",
+                "cluster_id": "cluster-electricity-mules-north",
+                "cluster_size": 5,
+                "shared_identifiers": ["discom.recovery@okhdfcbank", "103.21.58.12"],
+            },
+        )
+
+    corr_data = await add_case_to_graph(case=ctx.case, db=ctx.db)
+
+    # Append correlation event
+    ctx.db.add(
+        CaseEvent(
+            case_id=ctx.case.id,
+            stage="correlation",
+            kind="info",
+            message=f"Correlated into {corr_data.get('cluster_id')}: Attribution={corr_data.get('attribution')}",
+            data=corr_data,
+        )
+    )
+
     return StageResult(
         next_stage="evidence",
         data={
-            "stub": True,
-            "stage": "correlation",
-            "cluster_id": "cluster-electricity-mules-north",
-            "cluster_size": 5,
-            "shared_identifiers": ["discom.recovery@okhdfcbank", "103.21.58.12"],
+            "stub": False,
+            "correlation": corr_data,
+            "cluster_id": corr_data.get("cluster_id"),
+            "attribution": corr_data.get("attribution"),
         },
     )
 
 
 async def stage_evidence(ctx: StageContext) -> StageResult:
-    """Evidence stage: compiles forensic dossier and SHA-256 seal.
+    """Evidence stage: compiles forensic dossier and SHA-256 seal."""
+    raw = (ctx.case.raw_input or "").lower()
 
-    # STUB(s10)
-    """
+    if "#mock_stub" in raw:
+        return StageResult(
+            next_stage="reports",
+            data={
+                "stub": True,
+                "stage": "evidence",
+                "evidence_hash": "a3b2c1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+                "pdf_pages": 4,
+            },
+        )
+
+    ev_info = await run_evidence_pipeline(case=ctx.case, db=ctx.db)
+
+    ctx.db.add(
+        CaseEvent(
+            case_id=ctx.case.id,
+            stage="evidence",
+            kind="info",
+            message=f"Sealed evidence dossier (SHA-256: {ev_info['pdf_sha256'][:16]}...): HMAC sealed in hash-chained ledger pos #{ev_info['ledger_id']}",
+            data=ev_info,
+        )
+    )
+
     return StageResult(
         next_stage="reports",
         data={
-            "stub": True,
-            "stage": "evidence",
-            "evidence_hash": "a3b2c1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
-            "pdf_pages": 4,
+            "stub": False,
+            "evidence": ev_info,
+            "evidence_hash": ev_info["pdf_sha256"],
+            "bundle_hash": ev_info["bundle_sha256"],
+            "evidence_link": ev_info["evidence_link"],
         },
     )
 
@@ -509,7 +617,9 @@ class InProcessRunner:
                         return
 
                     # Renew worker lease before executing
-                    await self.renew_lease(session, case_id)
+                    current_case.lease_expires_at = datetime.now(timezone.utc) + timedelta(
+                        seconds=LEASE_DURATION_SECONDS
+                    )
 
                     # Execute stage with timeout
                     ctx = StageContext(

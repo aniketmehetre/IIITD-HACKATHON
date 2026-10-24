@@ -68,10 +68,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     try:
         from app.routers.cases import router as cases_router
+        from app.routers.evidence import router as evidence_router
+        from app.routers.graph import router as graph_router
     except ImportError:
         from backend.app.routers.cases import router as cases_router
+        from backend.app.routers.evidence import router as evidence_router
+        from backend.app.routers.graph import router as graph_router
 
     app.include_router(cases_router)
+    app.include_router(graph_router)
+    app.include_router(evidence_router)
 
     return app
 

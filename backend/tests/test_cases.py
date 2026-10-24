@@ -42,8 +42,17 @@ from app.agents.intake import (
 from app.config import Settings, get_settings
 from app.db import get_db_session
 from app.main import create_app
-from app.models.base import Base
-from app.models.case import Case, CaseEvent
+import app.models  # registers all models on Base.metadata
+from app.models import (
+    Base,
+    Case,
+    CaseEvent,
+    Edge,
+    EvidenceLedger,
+    Payee,
+    Site,
+    UsageLedger,
+)
 
 
 # Test database setup (in-memory SQLite with aiosqlite)
