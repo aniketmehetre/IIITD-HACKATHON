@@ -8,6 +8,7 @@ import { IntakeStagePanel } from "@/components/stages/IntakeStagePanel";
 import { TriageStagePanel } from "@/components/stages/TriageStagePanel";
 import { DetonationStagePanel } from "@/components/stages/DetonationStagePanel";
 import { EnrichmentStagePanel } from "@/components/stages/EnrichmentStagePanel";
+import { ClusterStagePanel } from "@/components/stages/ClusterStagePanel";
 import { api } from "@/lib/api";
 import { CaseSummary, InputType, PipelineStage } from "@/lib/types";
 import { 
@@ -115,27 +116,8 @@ export default function Home() {
               {/* STAGE 4: ENRICH */}
               {activeCase && <EnrichmentStagePanel caseData={activeCase} />}
 
-              {/* STAGE 5: CLUSTER (Syndicate Graph Preview) */}
-              <section id="stage-cluster" className="glass-panel" style={{ padding: "28px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "var(--accent-purple-dim)", border: "1px solid rgba(157, 78, 221, 0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Network size={18} color="var(--accent-purple)" />
-                    </div>
-                    <div>
-                      <h3 className="font-display" style={{ fontSize: "18px" }}>Stage 05: Syndicate Correlation Network</h3>
-                      <p className="text-muted font-mono" style={{ fontSize: "12px" }}>Graph correlation across shared mule infrastructure</p>
-                    </div>
-                  </div>
-                  <span className="cyber-badge cyber-badge-red">
-                    {activeCase?.result?.cluster.size ? `${activeCase?.result?.cluster.size} DOMAINS LINKED` : "0 LINKED"}
-                  </span>
-                </div>
-                <p className="font-mono text-muted" style={{ fontSize: "13px" }}>
-                  Cluster ID: <span className="text-cyan">{activeCase?.result?.cluster.cluster_id || "none"}</span> &bull; 
-                  Shared Identifiers: {activeCase?.result?.cluster.shared_identifiers.join(", ") || "None"}
-                </p>
-              </section>
+              {/* STAGE 5: CLUSTER */}
+              {activeCase && <ClusterStagePanel caseData={activeCase} />}
 
               {/* STAGE 6: ACT */}
               <section id="stage-act" className="glass-panel-verified" style={{ padding: "28px" }}>
