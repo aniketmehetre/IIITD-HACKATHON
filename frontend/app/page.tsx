@@ -6,6 +6,7 @@ import { StageProgressRail } from "@/components/StageProgressRail";
 import { CaseSubmissionBar } from "@/components/CaseSubmissionBar";
 import { IntakeStagePanel } from "@/components/stages/IntakeStagePanel";
 import { TriageStagePanel } from "@/components/stages/TriageStagePanel";
+import { DetonationStagePanel } from "@/components/stages/DetonationStagePanel";
 import { api } from "@/lib/api";
 import { CaseSummary, InputType, PipelineStage } from "@/lib/types";
 import { 
@@ -107,40 +108,8 @@ export default function Home() {
               {/* STAGE 2: TRIAGE */}
               {activeCase && <TriageStagePanel caseData={activeCase} />}
 
-              {/* STAGE 3: DETONATE (Preview for Section 6) */}
-              <section id="stage-detonate" className="glass-panel-cyan" style={{ padding: "28px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "var(--accent-red-dim)", border: "1px solid var(--border-red)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Zap size={18} color="var(--accent-red)" />
-                    </div>
-                    <div>
-                      <h3 className="font-display" style={{ fontSize: "18px" }}>Stage 03: Autonomous Agent Detonation</h3>
-                      <p className="text-muted font-mono" style={{ fontSize: "12px" }}>Synthetic victim navigation & intercept</p>
-                    </div>
-                  </div>
-                  <span className="cyber-badge cyber-badge-cyan">EXTRACTED PAYEE</span>
-                </div>
-                <div style={{ background: "#06070c", borderRadius: "8px", padding: "18px", border: "1px solid var(--border-cyan)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <span className="text-muted font-mono" style={{ fontSize: "11px" }}>INTERCEPTED UPI VPA</span>
-                      <p className="font-mono text-cyan" style={{ fontSize: "22px", fontWeight: 700 }}>
-                        {activeCase?.result?.payee.upi_vpa || "None (Benign Exit)"}
-                      </p>
-                      <p className="text-secondary font-mono" style={{ fontSize: "12px" }}>
-                        PSP: {activeCase?.result?.payee.psp_name || "N/A"} &bull; Account: {activeCase?.result?.payee.bank_account || "N/A"}
-                      </p>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span className="cyber-badge cyber-badge-green" style={{ fontSize: "11px" }}>
-                        <Lock size={12} />
-                        0 INR EXPENDED
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </section>
+              {/* STAGE 3: DETONATE */}
+              {activeCase && <DetonationStagePanel caseData={activeCase} />}
 
               {/* STAGE 4: ENRICH */}
               <section id="stage-enrich" className="glass-panel" style={{ padding: "28px" }}>
