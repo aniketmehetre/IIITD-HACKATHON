@@ -1,39 +1,85 @@
 """Pydantic schemas package."""
 
-from backend.app.schemas.case import (
-    CaseCreateRequest,
-    CaseResultResponse,
-    CaseStatusResponse,
-    CaseSummary,
-    EvidenceItem,
-    HealthResponse,
-    PayeeInfo,
-    ReportApprovalRequest,
-    ReportApprovalResponse,
-    ServiceHealth,
-    TraceEvent,
-)
-from backend.app.schemas.graph import (
-    GraphData,
-    GraphEdge,
-    GraphNode,
-)
-from backend.app.schemas.tinyfish import (
-    TinyFishAgentRequest,
-    TinyFishAgentResponse,
-    TinyFishBrowserSession,
-    TinyFishFetchItem,
-    TinyFishFetchRequest,
-    TinyFishFetchResponse,
-    TinyFishSearchResponse,
-    TinyFishSearchResult,
-    TinyFishVerificationResult,
-)
+try:
+    from app.schemas.case import (
+        CaseCreateRequest,
+        CaseDetail,
+        CaseEventsResponse,
+        CaseListResponse,
+        CaseResultResponse,
+        CaseStatusResponse,
+        CaseSummary,
+        ErrorResponse,
+        EvidenceItem,
+        HealthResponse,
+        PayeeInfo,
+        ReportApprovalRequest,
+        ReportApprovalResponse,
+        ServiceHealth,
+        StageEvent,
+        TraceEvent,
+    )
+    from app.schemas.graph import (
+        GraphData,
+        GraphEdge,
+        GraphNode,
+    )
+    from app.schemas.tinyfish import (
+        TinyFishAgentRequest,
+        TinyFishAgentResponse,
+        TinyFishBrowserSession,
+        TinyFishFetchItem,
+        TinyFishFetchRequest,
+        TinyFishFetchResponse,
+        TinyFishSearchResponse,
+        TinyFishSearchResult,
+        TinyFishVerificationResult,
+    )
+except ImportError:
+    from backend.app.schemas.case import (
+        CaseCreateRequest,
+        CaseDetail,
+        CaseEventsResponse,
+        CaseListResponse,
+        CaseResultResponse,
+        CaseStatusResponse,
+        CaseSummary,
+        ErrorResponse,
+        EvidenceItem,
+        HealthResponse,
+        PayeeInfo,
+        ReportApprovalRequest,
+        ReportApprovalResponse,
+        ServiceHealth,
+        StageEvent,
+        TraceEvent,
+    )
+    from backend.app.schemas.graph import (
+        GraphData,
+        GraphEdge,
+        GraphNode,
+    )
+    from backend.app.schemas.tinyfish import (
+        TinyFishAgentRequest,
+        TinyFishAgentResponse,
+        TinyFishBrowserSession,
+        TinyFishFetchItem,
+        TinyFishFetchRequest,
+        TinyFishFetchResponse,
+        TinyFishSearchResponse,
+        TinyFishSearchResult,
+        TinyFishVerificationResult,
+    )
 
 __all__ = [
     "CaseCreateRequest",
     "CaseSummary",
+    "CaseDetail",
+    "CaseListResponse",
+    "CaseEventsResponse",
+    "StageEvent",
     "TraceEvent",
+    "ErrorResponse",
     "CaseStatusResponse",
     "PayeeInfo",
     "EvidenceItem",
