@@ -1,7 +1,7 @@
 """Graph and Payee Correlation Endpoints conforming to shared/api-schema.json."""
 
+from backend.app.schemas.graph import GraphData, GraphEdge, GraphNode
 from fastapi import APIRouter
-from backend.app.schemas.graph import GraphData, GraphNode, GraphEdge
 
 router = APIRouter(tags=["Correlation Graph"])
 

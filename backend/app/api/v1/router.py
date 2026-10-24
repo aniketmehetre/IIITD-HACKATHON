@@ -1,6 +1,7 @@
 """API Version 1 Router aggregation."""
 
 from fastapi import APIRouter
+
 from backend.app.api.v1.endpoints import cases, graph, health, tinyfish_verify
 
 api_v1_router = APIRouter()

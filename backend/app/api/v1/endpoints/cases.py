@@ -1,22 +1,22 @@
 """Case Management Endpoints conforming to shared/api-schema.json."""
 
-from datetime import datetime, timezone
 import hashlib
 import uuid
-from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, status
+from datetime import datetime, timezone
+from typing import Any, Dict
 
 from backend.app.schemas.case import (
     CaseCreateRequest,
-    CaseSummary,
-    CaseStatusResponse,
     CaseResultResponse,
-    PayeeInfo,
+    CaseStatusResponse,
+    CaseSummary,
     EvidenceItem,
-    TraceEvent,
+    PayeeInfo,
     ReportApprovalRequest,
     ReportApprovalResponse,
+    TraceEvent,
 )
+from fastapi import APIRouter, HTTPException, status
 
 router = APIRouter(tags=["Cases"])
 
@@ -137,7 +137,11 @@ async def get_case_result(case_id: str):
     case = _CASE_STORE.get(case_id)
     now = datetime.now(timezone.utc).isoformat()
 
-    target = case.get("target", "https://quick-electricity-billpay.biz") if case else "https://quick-electricity-billpay.biz"
+    target = (
+        case.get("target", "https://quick-electricity-billpay.biz")
+        if case
+        else "https://quick-electricity-billpay.biz"
+    )
     approved = case.get("report_approved", False) if case else False
 
     # Standard high-fidelity result compliant with contract
@@ -211,21 +215,28 @@ async def approve_case_report(case_id: str, payload: ReportApprovalRequest):
     if case:
         case["report_approved"] = payload.approved
         case["updated_at"] = now
-        case["trace_events"].append({
-            "stage": "act",
-            "agent": "Report-Drafting Agent",
-            "message": f"Report {'approved' if payload.approved else 'rejected'} by {payload.reviewer}. Notes: {payload.notes or 'None'}",
-            "timestamp": now,
-        })
+        case["trace_events"].append(
+            {
+                "stage": "act",
+                "agent": "Report-Drafting Agent",
+                "message": f"Report {'approved' if payload.approved else 'rejected'} by {payload.reviewer}. Notes: {payload.notes or 'None'}",
+                "timestamp": now,
+            }
+        )
 
     dispatched = []
     if payload.approved:
-        dispatched = [f"{dest.upper()}_DISPATCH_TRIGGERED" for dest in (payload.action_destinations or ["cert_in", "bank_freeze"])]
+        dispatched = [
+            f"{dest.upper()}_DISPATCH_TRIGGERED"
+            for dest in (payload.action_destinations or ["cert_in", "bank_freeze"])
+        ]
 
     return ReportApprovalResponse(
         case_id=case_id,
         approved=payload.approved,
         approved_at=now,
         actions_dispatched=dispatched,
-        status="REPORT_AUTHORIZED_AND_DISPATCHED" if payload.approved else "REPORT_REJECTED_BY_ANALYST",
+        status="REPORT_AUTHORIZED_AND_DISPATCHED"
+        if payload.approved
+        else "REPORT_REJECTED_BY_ANALYST",
     )

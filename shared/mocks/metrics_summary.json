@@ -1,0 +1,8 @@
+{
+  "total_cases": 148,
+  "total_payees_extracted": 92,
+  "total_campaigns_clustered": 14,
+  "free_tier_triage_percentage": 64.5,
+  "avg_detonation_seconds": 41.2,
+  "active_mule_rings_identified": 8
+}

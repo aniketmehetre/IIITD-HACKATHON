@@ -1,0 +1,22 @@
+{
+  "events": [
+    {
+      "id": "evt-001",
+      "stage": "intake",
+      "message": "Candidate URL ingested and validated.",
+      "timestamp": "2026-10-24T12:00:01Z",
+      "level": "info",
+      "metadata": {}
+    },
+    {
+      "id": "evt-002",
+      "stage": "triage",
+      "message": "RDAP query returned domain age 3 days.",
+      "timestamp": "2026-10-24T12:00:04Z",
+      "level": "warning",
+      "metadata": {
+        "domain_age_days": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "case_id": "c-8f2a1b9c-44e2-411a-8219-bf98c52ad001",
+  "payee": {
+    "upi_vpa": "discom.powerbilling@okhdfcbank",
+    "psp_name": "HDFC Bank (Google Pay)",
+    "bank_account": "50200083921901",
+    "ifsc": "HDFC0001234",
+    "wallet_address": null
+  },
+  "attribution": "confirmed",
+  "cluster": {
+    "cluster_id": "cluster-electricity-mules-north",
+    "size": 5,
+    "shared_identifiers": [
+      "discom.powerbilling@okhdfcbank",
+      "103.21.58.12"
+    ]
+  },
+  "evidence_hash": "a3b2c1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+  "drafts": {
+    "i4c_complaint": "Cyber Crime Portal Complaint:\nLure: Fake Electricity Disconnection Notice\nDomain: electricity-bill-recovery.biz\nExtracted Payee VPA: discom.powerbilling@okhdfcbank\nBeneficiary Bank: HDFC Bank\nEvidence Hash: a3b2c1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+    "bank_alert": {
+      "target_bank": "HDFC Bank",
+      "risk_rating": "CRITICAL",
+      "recommended_action": "FREEZE_INWARD_CREDITS",
+      "account_number": "50200083921901",
+      "vpa": "discom.powerbilling@okhdfcbank"
+    },
+    "cert_in_advisory": {
+      "incident_type": "Phishing & Payment Interception Campaign",
+      "malicious_fqdn": "electricity-bill-recovery.biz",
+      "takedown_action": "DNS_SUSPENSION_REQUEST"
+    }
+  }
+}

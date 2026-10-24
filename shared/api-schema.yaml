@@ -1,0 +1,796 @@
+openapi: 3.1.0
+info:
+  title: STING API — Automated Scam Funnel Tracing & Intelligence Pipeline
+  version: 0.1.0
+  description: |
+    Shared API contract between STING Backend and Frontend (Team void main).
+    Autonomous pipeline that detonates suspicious funnels as a synthetic victim,
+    extracts payees (UPI, Bank, Crypto), correlates clusters via NetworkX graphs,
+    and produces cryptographically signed evidence and actionable takedown drafts.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development backend
+
+security:
+  - StingApiKey: []
+
+paths:
+  /health:
+    get:
+      summary: Service health and version check
+      description: Returns operational status and current build version.
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - version
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: 0.1.0
+
+  /cases:
+    post:
+      summary: Submit a suspicious link or message for autonomous investigation
+      description: Ingests an investigation candidate and enqueues intake processing.
+      security:
+        - StingApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input_type
+                - raw_input
+              properties:
+                input_type:
+                  type: string
+                  enum: [link, message]
+                  example: link
+                raw_input:
+                  type: string
+                  example: https://electricity-bill-recovery.biz/pay?id=83921
+                force_detonate:
+                  type: boolean
+                  default: false
+                  example: false
+      responses:
+        '201':
+          description: Case created and assigned ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseSummary'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid X-STING-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List recent investigation cases
+      description: Returns recent cases with optional status filtering and pagination.
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CaseStatus'
+        - name: include_seed
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Paginated list of case summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - total
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CaseSummary'
+                  total:
+                    type: integer
+                    example: 42
+                  next_cursor:
+                    type:
+                      - string
+                      - "null"
+
+  /cases/qr:
+    post:
+      summary: Upload a scam QR code image for decoding and detonation
+      description: Decodes QR image server-side, extracts payment payload or URL, and begins intake.
+      security:
+        - StingApiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                force_detonate:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: QR image received and case created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseSummary'
+        '400':
+          description: Invalid image or unreadable QR code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cases/{id}:
+    get:
+      summary: Retrieve full case details and live progress
+      description: Returns current stage, live streaming URL (if active), and up to 20 recent stage events.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Case details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Case'
+        '404':
+          description: Case not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cases/{id}/events:
+    get:
+      summary: Poll stage trace events
+      description: Efficient incremental polling endpoint for the frontend live-trace console.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Event ID or timestamp cursor to fetch events occurring after
+      responses:
+        '200':
+          description: List of stage trace events
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - events
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StageEvent'
+
+  /cases/{id}/stream:
+    get:
+      summary: Server-Sent Events (SSE) live progress stream
+      description: Real-time event stream emitting stage changes, logs, and screenshots.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Text event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /cases/{id}/result:
+    get:
+      summary: Get final investigation result
+      description: Returns extracted payee details, attribution confidence, evidence hash, and report drafts.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Complete investigation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '404':
+          description: Result not yet ready or case not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cases/{id}/evidence:
+    get:
+      summary: Download cryptographically sealed evidence PDF
+      description: Returns downloadable PDF evidence dossier with SHA-256 integrity seal.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Raw PDF binary
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Evidence PDF not yet generated
+
+  /evidence/verify:
+    post:
+      summary: Verify the authenticity and integrity of an evidence PDF
+      description: Checks cryptographic signature and SHA-256 hash against the immutable ledger.
+      security:
+        - StingApiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Verification outcome
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - valid
+                  - case_id
+                  - reason
+                properties:
+                  valid:
+                    type: boolean
+                    example: true
+                  case_id:
+                    type: string
+                    example: c-8f2a1b9c-44e2-411a-8219-bf98c52ad001
+                  sha256_hash:
+                    type: string
+                    example: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+                  verified_at:
+                    type: string
+                    format: date-time
+                  reason:
+                    type: string
+                    example: Cryptographic signature and SHA-256 hash match verified case record.
+
+  /cases/{id}/approve-report:
+    post:
+      summary: Authorize human-approved dispatch of takedown and law-enforcement complaints
+      description: Mandatory human-in-the-loop gate before any external reporting or takedown action.
+      security:
+        - StingApiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - approved
+                - reviewer
+                - reports
+              properties:
+                approved:
+                  type: boolean
+                  example: true
+                reviewer:
+                  type: string
+                  example: analyst.sharma@cybercell.gov.in
+                reports:
+                  type: array
+                  items:
+                    type: string
+                    enum: [i4c, bank_nodal, cert_in]
+                  example: [i4c, bank_nodal]
+                acknowledge_inferred:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Reports authorized and queued for dispatch
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - approved_at
+                  - dispatched_reports
+                properties:
+                  status:
+                    type: string
+                    example: approved
+                  approved_at:
+                    type: string
+                    format: date-time
+                  dispatched_reports:
+                    type: array
+                    items:
+                      type: string
+                    example: [i4c, bank_nodal]
+
+  /graph/overview:
+    get:
+      summary: Retrieve the global scam campaign correlation graph
+      description: Returns multi-campaign graph of linked payees, mule accounts, and phishing domains.
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+        - name: include_seed
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: min_cluster_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Cytoscape-compatible network overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphResponse'
+
+  /graph/{payee_id}:
+    get:
+      summary: Retrieve localized cluster graph for a specific payee ID
+      description: Returns nodes and edges connected to a designated UPI VPA, bank account, or crypto wallet.
+      security: []
+      parameters:
+        - name: payee_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Local cluster Cytoscape graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphResponse'
+
+  /metrics/summary:
+    get:
+      summary: Retrieve platform investigation metrics and efficiency stats
+      description: Aggregated KPI counts including money saved, detonation speed, and free-tier bypass ratio.
+      security: []
+      responses:
+        '200':
+          description: Platform metrics summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - total_cases
+                  - total_payees_extracted
+                  - total_campaigns_clustered
+                  - free_tier_triage_percentage
+                  - avg_detonation_seconds
+                properties:
+                  total_cases:
+                    type: integer
+                    example: 148
+                  total_payees_extracted:
+                    type: integer
+                    example: 92
+                  total_campaigns_clustered:
+                    type: integer
+                    example: 14
+                  free_tier_triage_percentage:
+                    type: number
+                    example: 64.5
+                  avg_detonation_seconds:
+                    type: number
+                    example: 41.2
+                  active_mule_rings_identified:
+                    type: integer
+                    example: 8
+
+components:
+  securitySchemes:
+    StingApiKey:
+      type: apiKey
+      in: header
+      name: X-STING-Key
+      description: Shared API key for mutating endpoints
+
+  schemas:
+    CaseStatus:
+      type: string
+      enum:
+        - received
+        - intake
+        - triage
+        - detonating
+        - enriching
+        - correlating
+        - evidencing
+        - awaiting_approval
+        - done
+        - inconclusive
+        - failed
+      example: triage
+
+    Outcome:
+      type: string
+      enum:
+        - confirmed_scam
+        - likely_benign
+        - known_payee_skipped
+        - known_site_skipped
+        - inconclusive
+        - failed
+      example: confirmed_scam
+
+    StageEvent:
+      type: object
+      required:
+        - id
+        - stage
+        - message
+        - timestamp
+      properties:
+        id:
+          type: string
+          example: evt-101
+        stage:
+          type: string
+          example: triage
+        message:
+          type: string
+          example: RDAP query returned domain age 4 days; flag for immediate detonation.
+        timestamp:
+          type: string
+          format: date-time
+        level:
+          type: string
+          enum: [info, warning, error]
+          default: info
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CaseSummary:
+      type: object
+      required:
+        - id
+        - input_type
+        - raw_input
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          example: c-8f2a1b9c-44e2-411a-8219-bf98c52ad001
+        input_type:
+          type: string
+          enum: [link, message, qr_image]
+          example: link
+        raw_input:
+          type: string
+          example: https://electricity-bill-recovery.biz/pay?id=83921
+        status:
+          $ref: '#/components/schemas/CaseStatus'
+        outcome:
+          anyOf:
+            - $ref: '#/components/schemas/Outcome'
+            - type: "null"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Case:
+      type: object
+      required:
+        - id
+        - input_type
+        - raw_input
+        - status
+        - recent_events
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          example: c-8f2a1b9c-44e2-411a-8219-bf98c52ad001
+        input_type:
+          type: string
+          enum: [link, message, qr_image]
+          example: link
+        raw_input:
+          type: string
+          example: https://electricity-bill-recovery.biz/pay?id=83921
+        status:
+          $ref: '#/components/schemas/CaseStatus'
+        outcome:
+          anyOf:
+            - $ref: '#/components/schemas/Outcome'
+            - type: "null"
+        streaming_url:
+          type:
+            - string
+            - "null"
+          example: https://agent.tinyfish.ai/live/stream-983120
+        recent_events:
+          type: array
+          description: Last 20 stage events for live monitoring
+          items:
+            $ref: '#/components/schemas/StageEvent'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Result:
+      type: object
+      required:
+        - case_id
+        - payee
+        - attribution
+        - cluster
+        - evidence_hash
+        - drafts
+      properties:
+        case_id:
+          type: string
+          example: c-8f2a1b9c-44e2-411a-8219-bf98c52ad001
+        payee:
+          type: object
+          required:
+            - upi_vpa
+            - psp_name
+          properties:
+            upi_vpa:
+              type: string
+              example: discom.powerbilling@okhdfcbank
+            psp_name:
+              type: string
+              example: HDFC Bank (Google Pay)
+            bank_account:
+              type:
+                - string
+                - "null"
+              example: "50200083921901"
+            ifsc:
+              type:
+                - string
+                - "null"
+              example: HDFC0001234
+            wallet_address:
+              type:
+                - string
+                - "null"
+              example: "0x71C...392A"
+        attribution:
+          type: string
+          enum: [confirmed, inferred]
+          example: confirmed
+        cluster:
+          type: object
+          required:
+            - cluster_id
+            - size
+          properties:
+            cluster_id:
+              type: string
+              example: cluster-electricity-mules-north
+            size:
+              type: integer
+              example: 5
+            shared_identifiers:
+              type: array
+              items:
+                type: string
+              example: [discom.powerbilling@okhdfcbank, 103.21.58.12]
+        evidence_hash:
+          type: string
+          example: a3b2c1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1
+        drafts:
+          type: object
+          required:
+            - i4c_complaint
+            - bank_alert
+            - cert_in_advisory
+          properties:
+            i4c_complaint:
+              type: string
+              example: "Cyber Fraud Report: Fraudulent electricity bill lure targeting HDFC bank account..."
+            bank_alert:
+              type: object
+              additionalProperties: true
+            cert_in_advisory:
+              type: object
+              additionalProperties: true
+
+    GraphNode:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          required:
+            - id
+            - label
+            - type
+          properties:
+            id:
+              type: string
+              example: node-vpa-1
+            label:
+              type: string
+              example: discom.powerbilling@okhdfcbank
+            type:
+              type: string
+              enum: [payee, domain, case, ip, mule]
+              example: payee
+
+    GraphEdge:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          required:
+            - id
+            - source
+            - target
+            - relationship
+          properties:
+            id:
+              type: string
+              example: edge-1-2
+            source:
+              type: string
+              example: node-domain-1
+            target:
+              type: string
+              example: node-vpa-1
+            relationship:
+              type: string
+              example: directs_payment_to
+
+    GraphResponse:
+      type: object
+      required:
+        - nodes
+        - edges
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphEdge'
+        total_clusters:
+          type: integer
+          example: 3
+        total_cases_linked:
+          type: integer
+          example: 12
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          example: Resource not found or validation error
+        code:
+          type: string
+          example: INVALID_INPUT

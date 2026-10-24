@@ -1,8 +1,8 @@
 # STING Frontend
 
-This folder is reserved for the Next.js frontend (Lenis scroll UI, live trace panel, Cytoscape graph view, evidence cards).
+Implementation paused.
 
-Per the architecture plan (Section 4 & Section 8):
-- Frontend implementation stays paused while research/visual direction is finalized.
-- Frontend coding starts after research phase completes, building straight against the locked API contract in `../shared/api-schema.json`.
-- Backend developers must not modify this folder.
+Per the STING Architecture & Repository Plan:
+- Frontend implementation is paused at the scaffold-preview stage until the reference/ideas research pass is done.
+- Frontend developers will build against `shared/api-schema.yaml` and mock JSON responses in `shared/mocks/`.
+- Backend developers must not modify this folder during backend sprints.

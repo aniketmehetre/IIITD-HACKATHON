@@ -1,14 +1,13 @@
 """Unit tests for TinyFish Client integration wrapper (Section 1)."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import httpx
+import pytest
 
 from backend.app.integrations.tinyfish import (
     TinyFishClient,
     TinyFishError,
-    TinyFishAuthError,
-    TinyFishRateLimitError,
 )
 
 
@@ -26,8 +25,10 @@ async def test_tinyfish_fetch_retries_once_on_500_before_raising():
     mock_response.status_code = 500
     mock_response.text = "Internal Server Error"
 
-    with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_request, \
-         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with (
+        patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_request,
+        patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
         mock_request.return_value = mock_response
 
         # Expect TinyFishError after 1 retry (total 2 attempts)
@@ -60,8 +61,10 @@ async def test_tinyfish_fetch_recovers_on_second_attempt():
         "results": [{"url": "https://scam-site.test", "content": "# Scam Page"}]
     }
 
-    with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_request, \
-         patch("asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_request,
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
         # First call fails with 503, second call succeeds with 200
         mock_request.side_effect = [failed_response, success_response]
 
@@ -81,8 +84,10 @@ async def test_tinyfish_fetch_retries_on_timeout():
         max_retries=1,
     )
 
-    with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_request, \
-         patch("asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_request,
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
         mock_request.side_effect = httpx.ConnectTimeout("Connection timed out")
 
         with pytest.raises(TinyFishError) as exc_info:

@@ -1,0 +1,7 @@
+{
+  "valid": true,
+  "case_id": "c-8f2a1b9c-44e2-411a-8219-bf98c52ad001",
+  "sha256_hash": "a3b2c1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+  "verified_at": "2026-10-24T12:05:00Z",
+  "reason": "Cryptographic signature and SHA-256 hash match verified case record."
+}
