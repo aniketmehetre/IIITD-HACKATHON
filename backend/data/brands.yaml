@@ -1,0 +1,135 @@
+# Known Indian Brands for Triage Impersonation & Mismatch Detection
+# Sources: Reserve Bank of India (RBI), NPCI, TRAI, Department of Telecommunications, Digital India portal
+# Rule: If brand keywords are present in page copy/title AND the target domain does not match any official_domains,
+#       brand_mismatch is flagged as True.
+
+brands:
+  # --- Public & Private Sector Banks ---
+  - name: State Bank of India
+    category: bank
+    keywords: ["sbi", "state bank of india", "onlinesbi", "yono", "yonosbi"]
+    official_domains: ["onlinesbi.sbi", "sbi.co.in", "sbi.bank.in", "bank.sbi"]
+
+  - name: HDFC Bank
+    category: bank
+    keywords: ["hdfc", "hdfc bank", "hdfc netbanking", "hdfcbank"]
+    official_domains: ["hdfcbank.com", "hdfc.com"]
+
+  - name: ICICI Bank
+    category: bank
+    keywords: ["icici", "icici bank", "imobile", "icicinetbanking"]
+    official_domains: ["icicibank.com"]
+
+  - name: Axis Bank
+    category: bank
+    keywords: ["axis bank", "axisbank", "open by axis"]
+    official_domains: ["axisbank.com"]
+
+  - name: Punjab National Bank
+    category: bank
+    keywords: ["pnb", "punjab national bank", "pnbone"]
+    official_domains: ["pnbindia.in"]
+
+  - name: Bank of Baroda
+    category: bank
+    keywords: ["bank of baroda", "bob world", "bobworld"]
+    official_domains: ["bankofbaroda.in", "bankofbaroda.com"]
+
+  - name: Kotak Mahindra Bank
+    category: bank
+    keywords: ["kotak", "kotak bank", "kotak mahindra", "kotak811", "811"]
+    official_domains: ["kotak.com"]
+
+  - name: Canara Bank
+    category: bank
+    keywords: ["canara bank", "canarabank", "canmobile"]
+    official_domains: ["canarabank.com"]
+
+  # --- UPI, Wallets & Fintech ---
+  - name: Paytm
+    category: fintech
+    keywords: ["paytm", "paytm payments bank", "paytmbank"]
+    official_domains: ["paytm.com", "paytmbank.com"]
+
+  - name: PhonePe
+    category: fintech
+    keywords: ["phonepe", "phone pe"]
+    official_domains: ["phonepe.com"]
+
+  - name: Google Pay
+    category: fintech
+    keywords: ["google pay", "gpay", "tez"]
+    official_domains: ["pay.google.com", "google.com"]
+
+  - name: BharatPe
+    category: fintech
+    keywords: ["bharatpe", "bharat pe"]
+    official_domains: ["bharatpe.com"]
+
+  - name: CRED
+    category: fintech
+    keywords: ["cred", "cred app", "cred pay"]
+    official_domains: ["cred.club"]
+
+  - name: Amazon Pay
+    category: fintech
+    keywords: ["amazon pay", "amazonpay"]
+    official_domains: ["amazon.in", "amazon.com"]
+
+  # --- Telecom Operators ---
+  - name: Reliance Jio
+    category: telecom
+    keywords: ["jio", "reliance jio", "myjio", "jio recharge"]
+    official_domains: ["jio.com"]
+
+  - name: Bharti Airtel
+    category: telecom
+    keywords: ["airtel", "bharti airtel", "airtel thanks", "airtel recharge"]
+    official_domains: ["airtel.in", "airtel.com"]
+
+  - name: Vodafone Idea
+    category: telecom
+    keywords: ["vodafone idea", "vi recharge", "myvi", "vodafone", "idea"]
+    official_domains: ["myvi.in"]
+
+  - name: BSNL
+    category: telecom
+    keywords: ["bsnl", "bharat sanchar nigam", "bsnl recharge"]
+    official_domains: ["bsnl.co.in", "bsnl.in"]
+
+  # --- Government Services, Tax & Identity ---
+  - name: Income Tax Department
+    category: government
+    keywords: ["income tax", "incometax", "it refund", "itr filing", "tax refund"]
+    official_domains: ["incometax.gov.in", "incometaxindia.gov.in"]
+
+  - name: Goods and Services Tax (GST)
+    category: government
+    keywords: ["goods and services tax", "gst portal", "gst refund", "gst invoice"]
+    official_domains: ["gst.gov.in"]
+
+  - name: Unique Identification Authority of India (UIDAI)
+    category: government
+    keywords: ["uidai", "aadhaar", "e-aadhaar", "myaadhaar", "mask aadhaar"]
+    official_domains: ["uidai.gov.in", "myaadhaar.uidai.gov.in"]
+
+  - name: Employees' Provident Fund Organisation (EPFO)
+    category: government
+    keywords: ["epfo", "epf", "provident fund", "uan portal", "epf claim"]
+    official_domains: ["epfindia.gov.in"]
+
+  - name: India Post
+    category: government
+    keywords: ["india post", "indiapost", "speed post", "dak seva", "post info"]
+    official_domains: ["indiapost.gov.in", "postinfo.gov.in"]
+
+  - name: National Cyber Crime Portal (I4C)
+    category: government
+    keywords: ["cyber crime portal", "national cyber crime", "cybercrime.gov.in", "1930"]
+    official_domains: ["cybercrime.gov.in"]
+
+  # --- Power & Electricity DISCOMs ---
+  - name: Electricity DISCOM
+    category: utility
+    keywords: ["electricity bill", "discom", "power bill", "bses", "mahavitaran", "tata power", "adani electricity", "uppcl", "bescom", "power disconnection"]
+    official_domains: ["bsesdelhi.com", "mahadiscom.in", "tatapower.com", "adanielectricity.com", "uppclonline.com", "bescom.karnataka.gov.in"]
