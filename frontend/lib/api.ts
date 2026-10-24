@@ -73,7 +73,10 @@ export const api = {
         const inputType = type === 'url' ? 'link' : type;
         const res = await fetch(`${BASE_URL}/cases`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-STING-Key': 'sting-dev-secret-key-123'
+          },
           body: JSON.stringify({ 
             input_type: inputType, 
             raw_input: content,
@@ -261,7 +264,10 @@ export const api = {
       try {
         const res = await fetch(`${BASE_URL}/cases/${id}/approve-report`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-STING-Key': 'sting-dev-secret-key-123'
+          },
           body: JSON.stringify({ approved })
         });
         if (res.ok) {

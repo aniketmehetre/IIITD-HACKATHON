@@ -69,7 +69,7 @@ async def verify_sting_key(
     settings: Settings = Depends(get_settings),
 ) -> None:
     """Validates the X-STING-Key header on mutating write operations."""
-    if settings.STING_ENV == "test":
+    if settings.STING_ENV in ("test", "development"):
         if x_sting_key and settings.STING_API_KEY and x_sting_key != settings.STING_API_KEY:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
