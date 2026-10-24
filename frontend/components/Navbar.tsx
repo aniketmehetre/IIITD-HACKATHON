@@ -18,13 +18,15 @@ interface NavbarProps {
   onModeChange: (mode: ViewMode) => void;
   selectedCaseId: string;
   onCaseSelect: (id: string) => void;
+  onRunGuidedDemo?: () => void;
 }
 
 export function Navbar({
   mode,
   onModeChange,
   selectedCaseId,
-  onCaseSelect
+  onCaseSelect,
+  onRunGuidedDemo
 }: NavbarProps) {
   const caseOptions = [
     { id: "c-pmcares-9281", label: "PM CARES Scam Lure", badge: "CRITICAL", color: "red" },
@@ -180,6 +182,23 @@ export function Navbar({
               <span>WAR ROOM</span>
             </button>
           </div>
+
+          {/* Guided Demo Auto-Run Trigger */}
+          {onRunGuidedDemo && (
+            <button
+              onClick={onRunGuidedDemo}
+              className="cyber-button-primary"
+              style={{
+                padding: "6px 14px",
+                fontSize: "11px",
+                background: "linear-gradient(135deg, var(--accent-cyan), #00a2ff)",
+                boxShadow: "0 0 16px rgba(0, 240, 255, 0.45)"
+              }}
+            >
+              <Sparkles size={13} />
+              <span>RUN GUIDED DEMO</span>
+            </button>
+          )}
 
           {/* Grid Status Beacon */}
           <div className="glass-panel" style={{ padding: "6px 12px", display: "flex", alignItems: "center", gap: "8px" }}>

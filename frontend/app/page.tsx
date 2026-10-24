@@ -59,6 +59,19 @@ export default function Home() {
     }
   };
 
+  const handleRunGuidedDemo = async () => {
+    setMode("story");
+    setSelectedCaseId("c-pmcares-9281");
+    const stages = ["stage-intake", "stage-triage", "stage-detonate", "stage-enrich", "stage-cluster", "stage-act"];
+    for (const st of stages) {
+      const elem = document.getElementById(st);
+      if (elem) {
+        elem.scrollIntoView({ behavior: "smooth" });
+      }
+      await new Promise(r => setTimeout(r, 1600));
+    }
+  };
+
   const currentStage: PipelineStage = activeCase?.current_stage || "intake";
 
   return (
@@ -69,6 +82,7 @@ export default function Home() {
         onModeChange={setMode}
         selectedCaseId={selectedCaseId}
         onCaseSelect={setSelectedCaseId}
+        onRunGuidedDemo={handleRunGuidedDemo}
       />
 
       {/* Stage Progress Rail */}
