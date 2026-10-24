@@ -1,0 +1,573 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "STING API - Automated Scam Investigation Pipeline",
+    "version": "1.0.0",
+    "description": "Shared API contract between STING Backend and Frontend. Enforces consistent data shapes for cases, detonation results, correlation graphs, and report approvals."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/cases": {
+      "post": {
+        "summary": "Create a new scam investigation case",
+        "description": "Accepts a suspicious URL, message text containing links/UPI, or a base64 encoded QR image to initiate the STING pipeline.",
+        "operationId": "createCase",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Case successfully created and enqueued for intake",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input provided"
+          }
+        }
+      }
+    },
+    "/cases/{id}": {
+      "get": {
+        "summary": "Poll case status and current stage",
+        "description": "Returns current stage of analysis (intake, triage, detonate, enrich, cluster, act), progression percentage, and live trace logs.",
+        "operationId": "getCaseStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique identifier of the case"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current status of the case",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseStatusResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Case not found"
+          }
+        }
+      }
+    },
+    "/cases/{id}/result": {
+      "get": {
+        "summary": "Retrieve final investigation results",
+        "description": "Returns comprehensive evidence, detonate screenshots, extracted payees (UPI IDs, bank accounts), domain WHOIS/RDAP, risk score, and correlation graph summary.",
+        "operationId": "getCaseResult",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique identifier of the case"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detailed investigation results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseResultResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Case not found"
+          }
+        }
+      }
+    },
+    "/graph/{payee_id}": {
+      "get": {
+        "summary": "Get campaign correlation graph for a known payee",
+        "description": "Retrieves the NetworkX-generated graph of interconnected campaigns, mule accounts, phone numbers, and domains linked to this payee ID.",
+        "operationId": "getPayeeGraph",
+        "parameters": [
+          {
+            "name": "payee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sanitized payee identifier (e.g. UPI VPA or hashed bank account)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign graph representation with nodes and edges",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphData"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Payee not found in correlation graph"
+          }
+        }
+      }
+    },
+    "/cases/{id}/approve-report": {
+      "post": {
+        "summary": "Human approval step for report dispatch",
+        "description": "Allows an analyst/investigator to review and approve or reject the auto-generated takedown and police complaint report.",
+        "operationId": "approveCaseReport",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique identifier of the case"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approval status updated and actions triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportApprovalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Case not found"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Backend health status",
+        "description": "Checks database, redis, and TinyFish API connectivity.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CaseCreateRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["url", "message", "qr"],
+            "default": "url"
+          },
+          "content": {
+            "type": "string",
+            "description": "Target URL, suspicious SMS/chat message, or base64 QR image data URI"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Optional client metadata (source, reported_by, tags)"
+          }
+        },
+        "required": ["content"]
+      },
+      "CaseSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "processing", "completed", "failed"]
+          },
+          "current_stage": {
+            "type": "string",
+            "enum": ["intake", "triage", "detonate", "enrich", "cluster", "act", "complete"]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "status", "current_stage", "created_at"]
+      },
+      "TraceEvent": {
+        "type": "object",
+        "properties": {
+          "stage": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": ["stage", "agent", "message", "timestamp"]
+      },
+      "CaseStatusResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "processing", "completed", "failed"]
+          },
+          "current_stage": {
+            "type": "string",
+            "enum": ["intake", "triage", "detonate", "enrich", "cluster", "act", "complete"]
+          },
+          "progress_pct": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "active_agent": {
+            "type": "string"
+          },
+          "trace_events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "status", "current_stage", "progress_pct", "trace_events"]
+      },
+      "PayeeInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "vpa": {
+            "type": "string"
+          },
+          "account_number": {
+            "type": "string"
+          },
+          "ifsc": {
+            "type": "string"
+          },
+          "holder_name": {
+            "type": "string"
+          },
+          "psp": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": ["id"]
+      },
+      "EvidenceItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["screenshot", "dom_dump", "redirect_chain", "rdap", "qr_decoded", "pdf_report"]
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "title", "type", "sha256"]
+      },
+      "CaseResultResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["MALICIOUS_SCAM", "SUSPICIOUS", "BENIGN", "INCONCLUSIVE"]
+          },
+          "scam_type": {
+            "type": "string"
+          },
+          "payees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayeeInfo"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            }
+          },
+          "redirect_chain": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "report_url": {
+            "type": "string"
+          },
+          "report_approved": {
+            "type": "boolean"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "risk_score", "verdict", "payees", "evidence"]
+      },
+      "GraphNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["payee", "case", "domain", "phone", "account", "ip"]
+          },
+          "risk_score": {
+            "type": "number"
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": ["id", "label", "type"]
+      },
+      "GraphEdge": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "relation": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number"
+          }
+        },
+        "required": ["id", "source", "target", "relation"]
+      },
+      "GraphData": {
+        "type": "object",
+        "properties": {
+          "payee_id": {
+            "type": "string"
+          },
+          "total_cases_linked": {
+            "type": "integer"
+          },
+          "estimated_loss_inr": {
+            "type": "number"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            }
+          }
+        },
+        "required": ["payee_id", "nodes", "edges"]
+      },
+      "ReportApprovalRequest": {
+        "type": "object",
+        "properties": {
+          "approved": {
+            "type": "boolean"
+          },
+          "reviewer": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "action_destinations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["cert_in", "cybercrime_portal", "isp_takedown", "bank_freeze"]
+            }
+          }
+        },
+        "required": ["approved", "reviewer"]
+      },
+      "ReportApprovalResponse": {
+        "type": "object",
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actions_dispatched": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": ["case_id", "approved", "status"]
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["healthy", "degraded", "unhealthy"]
+          },
+          "version": {
+            "type": "string"
+          },
+          "services": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "type": "string"
+              },
+              "redis": {
+                "type": "string"
+              },
+              "tinyfish": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": ["status", "version", "services"]
+      }
+    }
+  }
+}
