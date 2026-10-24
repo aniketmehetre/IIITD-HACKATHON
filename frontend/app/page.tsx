@@ -9,6 +9,7 @@ import { TriageStagePanel } from "@/components/stages/TriageStagePanel";
 import { DetonationStagePanel } from "@/components/stages/DetonationStagePanel";
 import { EnrichmentStagePanel } from "@/components/stages/EnrichmentStagePanel";
 import { ClusterStagePanel } from "@/components/stages/ClusterStagePanel";
+import { ActStagePanel } from "@/components/stages/ActStagePanel";
 import { api } from "@/lib/api";
 import { CaseSummary, InputType, PipelineStage } from "@/lib/types";
 import { 
@@ -120,32 +121,7 @@ export default function Home() {
               {activeCase && <ClusterStagePanel caseData={activeCase} />}
 
               {/* STAGE 6: ACT */}
-              <section id="stage-act" className="glass-panel-verified" style={{ padding: "28px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "var(--accent-green-dim)", border: "1px solid var(--border-green)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <FileCheck2 size={18} color="var(--accent-green)" />
-                    </div>
-                    <div>
-                      <h3 className="font-display" style={{ fontSize: "18px" }}>Stage 06: Evidence Vault & Takedown Dispatch</h3>
-                      <p className="text-muted font-mono" style={{ fontSize: "12px" }}>Pre-filled I4C, Bank Lien & CERT-In dossiers</p>
-                    </div>
-                  </div>
-                  <span className="cyber-badge cyber-badge-green">READY FOR SIGN-OFF</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <span className="font-mono text-muted" style={{ fontSize: "11px" }}>EVIDENCE SHA-256 HASH</span>
-                    <p className="font-mono text-green" style={{ fontSize: "13px" }}>
-                      {activeCase?.result?.evidence_hash || "N/A"}
-                    </p>
-                  </div>
-                  <button className="cyber-button-primary">
-                    <span>APPROVE TAKEDOWN</span>
-                    <ArrowRight size={15} />
-                  </button>
-                </div>
-              </section>
+              {activeCase && <ActStagePanel caseData={activeCase} />}
             </div>
           </div>
         ) : (
