@@ -7,6 +7,7 @@ import { CaseSubmissionBar } from "@/components/CaseSubmissionBar";
 import { IntakeStagePanel } from "@/components/stages/IntakeStagePanel";
 import { TriageStagePanel } from "@/components/stages/TriageStagePanel";
 import { DetonationStagePanel } from "@/components/stages/DetonationStagePanel";
+import { EnrichmentStagePanel } from "@/components/stages/EnrichmentStagePanel";
 import { api } from "@/lib/api";
 import { CaseSummary, InputType, PipelineStage } from "@/lib/types";
 import { 
@@ -112,23 +113,7 @@ export default function Home() {
               {activeCase && <DetonationStagePanel caseData={activeCase} />}
 
               {/* STAGE 4: ENRICH */}
-              <section id="stage-enrich" className="glass-panel" style={{ padding: "28px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "var(--accent-purple-dim)", border: "1px solid rgba(157, 78, 221, 0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Cpu size={18} color="var(--accent-purple)" />
-                    </div>
-                    <div>
-                      <h3 className="font-display" style={{ fontSize: "18px" }}>Stage 04: Enrichment & Intelligence Resolution</h3>
-                      <p className="text-muted font-mono" style={{ fontSize: "12px" }}>PSP identification and QR code payload dissection</p>
-                    </div>
-                  </div>
-                  <span className="cyber-badge cyber-badge-purple">RESOLVED</span>
-                </div>
-                <p className="font-mono text-secondary" style={{ fontSize: "13px" }}>
-                  Resolved Bank: <span className="text-cyan font-bold">{activeCase?.result?.enrichment.bank_name || "N/A"}</span> ({activeCase?.result?.enrichment.resolved_psp})
-                </p>
-              </section>
+              {activeCase && <EnrichmentStagePanel caseData={activeCase} />}
 
               {/* STAGE 5: CLUSTER (Syndicate Graph Preview) */}
               <section id="stage-cluster" className="glass-panel" style={{ padding: "28px" }}>
