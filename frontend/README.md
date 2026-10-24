@@ -1,8 +1,20 @@
 # STING Frontend
 
-Implementation paused.
+Mission Control & Investigation UI for the STING Autonomous Threat Intelligence Platform.
 
-Per the STING Architecture & Repository Plan:
-- Frontend implementation is paused at the scaffold-preview stage until the reference/ideas research pass is done.
-- Frontend developers will build against `shared/api-schema.yaml` and mock JSON responses in `shared/mocks/`.
-- Backend developers must not modify this folder during backend sprints.
+## Tech Stack
+- **Framework:** Next.js 16 (App Router) + React 19 + TypeScript
+- **Styling:** Vanilla Cyber HUD Design System (`app/globals.css`)
+- **Motion & Scroll:** Lenis smooth scroll + Motion.dev (Framer Motion)
+- **Visuals:** Cytoscape.js (Syndicate Graph), Lucide icons, Canvas Confetti
+
+## Getting Started
+```bash
+cd frontend
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+## API Contract Alignment
+All components build against `shared/api-schema.json` and static mocks in `shared/mocks/`.
