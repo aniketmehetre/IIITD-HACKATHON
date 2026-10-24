@@ -1,7 +1,7 @@
 """Pydantic models for Case Management and Pipeline Status conforming to shared/api-schema.json."""
 
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any, Literal
+from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -76,9 +76,9 @@ class ReportApprovalRequest(BaseModel):
     approved: bool
     reviewer: str
     notes: Optional[str] = None
-    action_destinations: Optional[List[Literal["cert_in", "cybercrime_portal", "isp_takedown", "bank_freeze"]]] = Field(
-        default_factory=lambda: ["cert_in", "bank_freeze"]
-    )
+    action_destinations: Optional[
+        List[Literal["cert_in", "cybercrime_portal", "isp_takedown", "bank_freeze"]]
+    ] = Field(default_factory=lambda: ["cert_in", "bank_freeze"])
 
 
 class ReportApprovalResponse(BaseModel):

@@ -1,10 +1,11 @@
 """Pydantic schemas for TinyFish integration surfaces (Fetch, Search, Agent, Browser)."""
 
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
-
 # --- Search API Schemas ---
+
 
 class TinyFishSearchResult(BaseModel):
     title: str
@@ -21,6 +22,7 @@ class TinyFishSearchResponse(BaseModel):
 
 
 # --- Fetch API Schemas ---
+
 
 class TinyFishFetchRequest(BaseModel):
     urls: List[str] = Field(..., max_length=10)
@@ -48,6 +50,7 @@ class TinyFishFetchResponse(BaseModel):
 
 
 # --- Agent API (Detonation) Schemas ---
+
 
 class TinyFishAgentRequest(BaseModel):
     url: str
@@ -81,6 +84,7 @@ class TinyFishAgentResponse(BaseModel):
 
 # --- Browser API (Managed Cloud Sessions) Schemas ---
 
+
 class TinyFishBrowserSessionCreate(BaseModel):
     url: Optional[str] = None
     viewport_width: int = 1280
@@ -97,6 +101,7 @@ class TinyFishBrowserSession(BaseModel):
 
 
 # --- Verification / Health Check Schema ---
+
 
 class TinyFishVerificationResult(BaseModel):
     client_ready: bool

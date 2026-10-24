@@ -17,21 +17,19 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Union
 
 import httpx
 
 from backend.app.core.config import settings
 from backend.app.schemas.tinyfish import (
+    TinyFishAgentEvent,
+    TinyFishAgentResponse,
+    TinyFishBrowserSession,
+    TinyFishFetchItem,
+    TinyFishFetchResponse,
     TinyFishSearchResponse,
     TinyFishSearchResult,
-    TinyFishFetchRequest,
-    TinyFishFetchResponse,
-    TinyFishFetchItem,
-    TinyFishAgentRequest,
-    TinyFishAgentResponse,
-    TinyFishAgentEvent,
-    TinyFishBrowserSession,
     TinyFishVerificationResult,
 )
 
@@ -42,9 +40,13 @@ logger = logging.getLogger("sting.tinyfish")
 # Custom Exceptions (Per Section 1 Spec)
 # ==============================================================================
 
+
 class TinyFishError(Exception):
     """Base exception for all TinyFish integration errors."""
-    def __init__(self, message: str, status_code: Optional[int] = None, details: Optional[Any] = None):
+
+    def __init__(
+        self, message: str, status_code: Optional[int] = None, details: Optional[Any] = None
+    ):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -53,22 +55,26 @@ class TinyFishError(Exception):
 
 class TinyFishAuthError(TinyFishError):
     """Raised on HTTP 401 or 403 (invalid or missing API key)."""
+
     pass
 
 
 class TinyFishRateLimitError(TinyFishError):
     """Raised on HTTP 429 when retry has also exhausted."""
+
     pass
 
 
 class TinyFishNetworkError(TinyFishError):
     """Raised on network connection failure or timeout."""
+
     pass
 
 
 # ==============================================================================
 # TinyFish Client Wrapper
 # ==============================================================================
+
 
 class TinyFishClient:
     """Production-ready client wrapper for TinyFish services."""
@@ -90,14 +96,18 @@ class TinyFishClient:
         self.search_url = (search_url or settings.TINYFISH_SEARCH_URL).rstrip("/")
         self.fetch_url = (fetch_url or settings.TINYFISH_FETCH_URL).rstrip("/")
         self.browser_url = (browser_url or settings.TINYFISH_BROWSER_URL).rstrip("/")
-        self.mock_fallback = mock_fallback if mock_fallback is not None else settings.TINYFISH_MOCK_FALLBACK
+        self.mock_fallback = (
+            mock_fallback if mock_fallback is not None else settings.TINYFISH_MOCK_FALLBACK
+        )
         self.max_retries = max_retries
         self.timeout = timeout if timeout is not None else settings.TINYFISH_TIMEOUT_SECONDS
 
     @property
     def is_live_ready(self) -> bool:
         """Returns True if a valid API key is present."""
-        return bool(self.api_key and self.api_key.strip() and self.api_key.strip() != "your_api_key_here")
+        return bool(
+            self.api_key and self.api_key.strip() and self.api_key.strip() != "your_api_key_here"
+        )
 
     def _get_headers(self) -> Dict[str, str]:
         """Build standard headers with API Key authorization."""
@@ -216,7 +226,9 @@ class TinyFishClient:
             if self.mock_fallback:
                 mock_model = self._mock_fetch(urls, format)
                 return mock_model.model_dump()
-            raise TinyFishAuthError("TINYFISH_API_KEY is not configured and mock fallback is disabled.")
+            raise TinyFishAuthError(
+                "TINYFISH_API_KEY is not configured and mock fallback is disabled."
+            )
 
         try:
             payload = {
@@ -251,7 +263,9 @@ class TinyFishClient:
         if not self.is_live_ready:
             if self.mock_fallback:
                 return self._mock_search(query).model_dump()
-            raise TinyFishAuthError("TINYFISH_API_KEY is not configured and mock fallback is disabled.")
+            raise TinyFishAuthError(
+                "TINYFISH_API_KEY is not configured and mock fallback is disabled."
+            )
 
         try:
             url = f"{self.search_url}"
@@ -278,7 +292,10 @@ class TinyFishClient:
     async def run_agent(self, payload: Union[Dict[str, Any], str]) -> Dict[str, Any]:
         """Autonomously navigates and detonates suspicious page according to payload instructions."""
         if isinstance(payload, str):
-            payload = {"url": payload, "goal": "Interact with scam portal, reach payment step, extract payee"}
+            payload = {
+                "url": payload,
+                "goal": "Interact with scam portal, reach payment step, extract payee",
+            }
 
         url = payload.get("url", "")
         goal = payload.get("goal", "Interact with scam portal, reach payment step, extract payee")
@@ -286,7 +303,9 @@ class TinyFishClient:
         if not self.is_live_ready:
             if self.mock_fallback:
                 return self._mock_detonate(url, goal).model_dump()
-            raise TinyFishAuthError("TINYFISH_API_KEY is not configured and mock fallback is disabled.")
+            raise TinyFishAuthError(
+                "TINYFISH_API_KEY is not configured and mock fallback is disabled."
+            )
 
         try:
             target_endpoint = f"{self.base_url}/v1/automation/run"
@@ -309,7 +328,9 @@ class TinyFishClient:
     # Alias for Section 5 detonation
     async def detonate(self, url: str, goal: Optional[str] = None) -> TinyFishAgentResponse:
         """Helper method returning typed TinyFishAgentResponse model."""
-        res_dict = await self.run_agent({"url": url, "goal": goal or "Detonate and extract payment payee"})
+        res_dict = await self.run_agent(
+            {"url": url, "goal": goal or "Detonate and extract payment payee"}
+        )
         if "session_id" in res_dict and "extracted_data" in res_dict:
             return TinyFishAgentResponse(**res_dict)
         return TinyFishAgentResponse(
@@ -334,7 +355,9 @@ class TinyFishClient:
         if not self.is_live_ready:
             if self.mock_fallback:
                 return self._mock_browser_session(url).model_dump()
-            raise TinyFishAuthError("TINYFISH_API_KEY is not configured and mock fallback is disabled.")
+            raise TinyFishAuthError(
+                "TINYFISH_API_KEY is not configured and mock fallback is disabled."
+            )
 
         try:
             endpoint = f"{self.browser_url}/sessions"
@@ -390,11 +413,15 @@ class TinyFishClient:
         except Exception as e:
             fetch_ok = f"FAILED: {e}"
 
-        ready = (search_ok == "OK" and fetch_ok == "OK")
+        ready = search_ok == "OK" and fetch_ok == "OK"
         msg = (
             "TinyFish client operational in LIVE mode."
             if (ready and self.is_live_ready)
-            else ("TinyFish operational in MOCK FALLBACK mode. Set TINYFISH_API_KEY in .env to switch to live." if ready else "TinyFish verification failed.")
+            else (
+                "TinyFish operational in MOCK FALLBACK mode. Set TINYFISH_API_KEY in .env to switch to live."
+                if ready
+                else "TinyFish verification failed."
+            )
         )
 
         return TinyFishVerificationResult(
@@ -446,7 +473,7 @@ class TinyFishClient:
     def _mock_fetch(self, urls: List[str], format: str) -> TinyFishFetchResponse:
         """Returns realistic simulated phishing landing page markdown."""
         target_url = urls[0] if urls else "https://quick-electricity-billpay.biz"
-        content = f"""# URGENT NOTICE: IMMEDIATE POWER DISCONNECTION SCHEDULED
+        content = """# URGENT NOTICE: IMMEDIATE POWER DISCONNECTION SCHEDULED
 
 Your electricity connection will be suspended tonight at 9:30 PM due to an unpaid balance of **INR 1,840.00** on your consumer number.
 
@@ -468,15 +495,13 @@ Your electricity connection will be suspended tonight at 9:30 PM due to an unpai
                     title="Urgent Power Bill Settlement Portal",
                     links=[
                         "https://payment-gateway-gateway.xyz/checkout?ref=mule8839",
-                        "https://cdn-storage-cdn.net/dl/bses-support-v2.apk"
+                        "https://cdn-storage-cdn.net/dl/bses-support-v2.apk",
                     ],
-                    image_links=[
-                        "https://quick-electricity-billpay.biz/assets/official-seal.png"
-                    ],
+                    image_links=["https://quick-electricity-billpay.biz/assets/official-seal.png"],
                     redirect_chain=[
                         target_url,
                         "https://redirector.net/hop/3991",
-                        "https://payment-gateway-gateway.xyz/checkout?ref=mule8839"
+                        "https://payment-gateway-gateway.xyz/checkout?ref=mule8839",
                     ],
                 )
             ],
@@ -487,7 +512,7 @@ Your electricity connection will be suspended tonight at 9:30 PM due to an unpai
         """Simulates autonomous detonation through the scam lure to extract mule payee."""
         now = datetime.now(timezone.utc).isoformat()
         session_id = f"mock-det-{uuid.uuid4().hex[:12]}"
-        
+
         events = [
             TinyFishAgentEvent(
                 event_type="NAVIGATION",
@@ -535,12 +560,12 @@ Your electricity connection will be suspended tonight at 9:30 PM due to an unpai
             redirect_chain=[
                 url,
                 "https://redirector.net/hop/3991",
-                "https://payment-gateway-gateway.xyz/checkout?ref=mule8839"
+                "https://payment-gateway-gateway.xyz/checkout?ref=mule8839",
             ],
             events=events,
             screenshots=[
                 "https://mock-evidence.sting/screenshots/landing-page.png",
-                "https://mock-evidence.sting/screenshots/payment-modal.png"
+                "https://mock-evidence.sting/screenshots/payment-modal.png",
             ],
             is_mock=True,
         )

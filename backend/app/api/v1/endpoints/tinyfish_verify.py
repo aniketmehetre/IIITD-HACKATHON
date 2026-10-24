@@ -1,8 +1,8 @@
 """TinyFish Integration Verification Endpoint."""
 
-from fastapi import APIRouter
-from backend.app.schemas.tinyfish import TinyFishVerificationResult
 from backend.app.integrations.tinyfish import tinyfish_client
+from backend.app.schemas.tinyfish import TinyFishVerificationResult
+from fastapi import APIRouter
 
 router = APIRouter(tags=["TinyFish"])
 

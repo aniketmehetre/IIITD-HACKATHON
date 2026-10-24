@@ -1,10 +1,10 @@
 """Application Settings and Configuration."""
 
-from typing import List, Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
 import os
-from pathlib import Path
+from typing import List, Optional
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "STING — Autonomous Scam Detection & Intelligence Pipeline"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
-    ENVIRONMENT: str = Field(default="development", description="development | staging | production | test")
+    ENVIRONMENT: str = Field(
+        default="development", description="development | staging | production | test"
+    )
     LOG_LEVEL: str = "INFO"
     SECRET_KEY: str = "sting-dev-secret-key-32chars-min-length-super-secure"
     HOST: str = "0.0.0.0"
@@ -24,18 +26,20 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
-        "*"
+        "*",
     ]
 
     # TinyFish API settings
-    TINYFISH_API_KEY: Optional[str] = Field(default=None, description="API Key for TinyFish web intelligence")
+    TINYFISH_API_KEY: Optional[str] = Field(
+        default=None, description="API Key for TinyFish web intelligence"
+    )
     TINYFISH_BASE_URL: str = "https://agent.tinyfish.ai"
     TINYFISH_SEARCH_URL: str = "https://api.search.tinyfish.ai"
     TINYFISH_FETCH_URL: str = "https://api.fetch.tinyfish.ai"
     TINYFISH_BROWSER_URL: str = "https://api.browser.tinyfish.ai"
     TINYFISH_MOCK_FALLBACK: bool = Field(
-        default=True, 
-        description="Whether to use high-fidelity simulated responses when TINYFISH_API_KEY is not set"
+        default=True,
+        description="Whether to use high-fidelity simulated responses when TINYFISH_API_KEY is not set",
     )
     TINYFISH_MAX_RETRIES: int = 2
     TINYFISH_TIMEOUT_SECONDS: float = 30.0
@@ -43,9 +47,11 @@ class Settings(BaseSettings):
     # Persistence & Queues
     DATABASE_URL: str = Field(
         default="sqlite+aiosqlite:///./sting.db",
-        description="SQLAlchemy async database URI (PostgreSQL or SQLite fallback)"
+        description="SQLAlchemy async database URI (PostgreSQL or SQLite fallback)",
     )
-    POSTGRES_DATABASE_URL: Optional[str] = "postgresql+asyncpg://postgres:postgres@localhost:5432/sting_db"
+    POSTGRES_DATABASE_URL: Optional[str] = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/sting_db"
+    )
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Artifact Storage
