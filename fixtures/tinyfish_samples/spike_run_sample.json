@@ -1,0 +1,32 @@
+{
+  "target_url": "https://sting-funnel-a1.vercel.app",
+  "run_id": "run-mock-detonate-01",
+  "status": "COMPLETED",
+  "duration_seconds": 0.0,
+  "proxy_used": "IN",
+  "proxy_fallback_triggered": false,
+  "streaming_url": "https://agent.tinyfish.ai/live/stream-mock-detonate",
+  "result": {
+    "payee_upi": "discom.powerbilling@okhdfcbank",
+    "bank_account": "50200083921901",
+    "wallet": null,
+    "qr_visible": true,
+    "qr_payload_text": "upi://pay?pa=discom.powerbilling@okhdfcbank&pn=ElectricityBill&am=499",
+    "amount_requested": 499.0,
+    "brand_claimed": "State Electricity Board",
+    "funnel_steps": [
+      "Visited landing lure",
+      "Filled dummy contact information",
+      "Reached payment modal",
+      "Intercepted payee UPI handle before payment"
+    ],
+    "blocked_reason": null,
+    "final_url": "https://payment-gateway-sim.biz/checkout"
+  },
+  "browser_config": {
+    "profile": "stealth",
+    "proxy_country": "IN",
+    "max_steps": 30,
+    "max_seconds": 180
+  }
+}
