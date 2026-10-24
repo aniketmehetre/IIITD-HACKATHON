@@ -1,19 +1,17 @@
 """External service integrations (TinyFish, OSINT, RDAP)."""
 
 from backend.app.integrations.tinyfish import (
-    TinyFishAuthError,
+    AgentRun,
     TinyFishClient,
     TinyFishError,
-    TinyFishNetworkError,
-    TinyFishRateLimitError,
+    redact_secrets,
     tinyfish_client,
 )
 
 __all__ = [
+    "AgentRun",
     "TinyFishClient",
-    "tinyfish_client",
     "TinyFishError",
-    "TinyFishAuthError",
-    "TinyFishRateLimitError",
-    "TinyFishNetworkError",
+    "redact_secrets",
+    "tinyfish_client",
 ]

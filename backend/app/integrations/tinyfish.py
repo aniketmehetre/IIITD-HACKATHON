@@ -1,74 +1,85 @@
-"""Single Unified TinyFish API Client Wrapper.
+"""TinyFish API Client Wrapper.
 
-Provides structured access to TinyFish's four API surfaces:
-1. Fetch API (Free tier)  — JS-rendered DOM extraction (Markdown/HTML/JSON)
-2. Search API (Free tier) — Threat intelligence and query discovery
-3. Agent API (Paid tier)   — Autonomous browser detonation and goal-driven interaction
-4. Browser API (Paid tier) — Managed Chromium/CDP cloud sessions
-
-Implements:
-- 1-retry on timeouts and 5xx server errors
-- Custom TinyFishError raised after retries fail
-- Zero hardcoded credentials (reads strictly from Settings)
-- Support for both parsed dict/JSON output and Pydantic schemas
+Single unified seam for all TinyFish web intelligence and autonomous agent calls:
+- Built on top of the official AsyncTinyFish SDK.
+- Typed errors: TinyFishError(kind in auth|rate_limit|timeout|server|bad_request|run_failed).
+- Exact 1-retry policy on timeout, 5xx, and 429 (never retry 4xx auth or completed runs).
+- `before_paid_call` async hook guard attached to Agent and Browser endpoints.
+- Strict API key redaction from exception messages and logging.
 """
 
 import asyncio
 import logging
-import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from collections.abc import AsyncGenerator, Callable, Coroutine
+from dataclasses import dataclass
+from typing import Any, Literal
 
 import httpx
+import tinyfish
+from tinyfish import AsyncTinyFish
 
-from backend.app.core.config import settings
-from backend.app.schemas.tinyfish import (
-    TinyFishAgentEvent,
-    TinyFishAgentResponse,
-    TinyFishBrowserSession,
-    TinyFishFetchItem,
-    TinyFishFetchResponse,
-    TinyFishSearchResponse,
-    TinyFishSearchResult,
-    TinyFishVerificationResult,
-)
+from app.config import Settings, get_settings
 
 logger = logging.getLogger("sting.tinyfish")
 
+TinyFishErrorKind = Literal["auth", "rate_limit", "timeout", "server", "bad_request", "run_failed"]
+
 
 # ==============================================================================
-# Custom Exceptions (Per Section 1 Spec)
+# Typed Errors and Redaction Helpers
 # ==============================================================================
+
+
+def redact_secrets(text: str, secret: str | None) -> str:
+    """Replaces occurrences of secret with [REDACTED]."""
+    if not text:
+        return ""
+    if secret and secret.strip() and len(secret.strip()) >= 4:
+        return text.replace(secret.strip(), "[REDACTED]")
+    return text
 
 
 class TinyFishError(Exception):
-    """Base exception for all TinyFish integration errors."""
+    """Base typed exception for all TinyFish integration failures."""
 
     def __init__(
-        self, message: str, status_code: Optional[int] = None, details: Optional[Any] = None
-    ):
-        super().__init__(message)
-        self.message = message
+        self,
+        kind: TinyFishErrorKind,
+        message: str,
+        retriable: bool = False,
+        status_code: int | None = None,
+        secret_to_redact: str | None = None,
+    ) -> None:
+        clean_msg = redact_secrets(message, secret_to_redact)
+        super().__init__(clean_msg)
+        self.kind = kind
+        self.message = clean_msg
+        self.retriable = retriable
         self.status_code = status_code
-        self.details = details
+
+    def __str__(self) -> str:
+        return f"TinyFishError(kind={self.kind}, status_code={self.status_code}): {self.message}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
-class TinyFishAuthError(TinyFishError):
-    """Raised on HTTP 401 or 403 (invalid or missing API key)."""
-
-    pass
-
-
-class TinyFishRateLimitError(TinyFishError):
-    """Raised on HTTP 429 when retry has also exhausted."""
-
-    pass
+# ==============================================================================
+# AgentRun Dataclass (Section 2 Spec)
+# ==============================================================================
 
 
-class TinyFishNetworkError(TinyFishError):
-    """Raised on network connection failure or timeout."""
+@dataclass
+class AgentRun:
+    """Normalized response representation for an autonomous TinyFish detonation run."""
 
-    pass
+    run_id: str
+    status: Literal["PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"]
+    result: dict[str, Any] | None
+    streaming_url: str | None = None
+    browser_config: dict[str, Any] | None = None
+    error: str | None = None
+    raw: dict[str, Any] | None = None
 
 
 # ==============================================================================
@@ -77,511 +88,460 @@ class TinyFishNetworkError(TinyFishError):
 
 
 class TinyFishClient:
-    """Production-ready client wrapper for TinyFish services."""
+    """Production client wrapper isolating all TinyFish external interactions."""
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
-        search_url: Optional[str] = None,
-        fetch_url: Optional[str] = None,
-        browser_url: Optional[str] = None,
-        mock_fallback: Optional[bool] = None,
+        api_key: str | None = None,
+        settings: Settings | None = None,
         max_retries: int = 1,
-        timeout: Optional[float] = None,
-    ):
-        # Reads key strictly from Settings / environment
-        self.api_key = api_key if api_key is not None else settings.TINYFISH_API_KEY
-        self.base_url = (base_url or settings.TINYFISH_BASE_URL).rstrip("/")
-        self.search_url = (search_url or settings.TINYFISH_SEARCH_URL).rstrip("/")
-        self.fetch_url = (fetch_url or settings.TINYFISH_FETCH_URL).rstrip("/")
-        self.browser_url = (browser_url or settings.TINYFISH_BROWSER_URL).rstrip("/")
-        self.mock_fallback = (
-            mock_fallback if mock_fallback is not None else settings.TINYFISH_MOCK_FALLBACK
-        )
+        backoff_seconds: float = 0.5,
+        before_paid_call: Callable[[], Coroutine[Any, Any, None]] | None = None,
+        mock_fallback: bool = True,
+    ) -> None:
         self.max_retries = max_retries
-        self.timeout = timeout if timeout is not None else settings.TINYFISH_TIMEOUT_SECONDS
+        self.backoff_seconds = backoff_seconds
+        self.before_paid_call = before_paid_call
+        self.mock_fallback = mock_fallback
+
+        if api_key is not None:
+            self.api_key = api_key
+        elif settings is not None:
+            self.api_key = settings.TINYFISH_API_KEY
+        else:
+            try:
+                self.api_key = get_settings().TINYFISH_API_KEY
+            except Exception:
+                self.api_key = None
+
+        # Initialize official AsyncTinyFish SDK instance
+        self._sdk = AsyncTinyFish(api_key=self.api_key or "placeholder-key")
 
     @property
-    def is_live_ready(self) -> bool:
-        """Returns True if a valid API key is present."""
-        return bool(
-            self.api_key and self.api_key.strip() and self.api_key.strip() != "your_api_key_here"
-        )
+    def has_live_credentials(self) -> bool:
+        """Returns True if a non-placeholder API key is set."""
+        if not self.api_key:
+            return False
+        cleaned = self.api_key.strip()
+        return bool(cleaned and not cleaned.startswith("test-") and cleaned != "placeholder-key")
 
-    def _get_headers(self) -> Dict[str, str]:
-        """Build standard headers with API Key authorization."""
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": f"STING-Investigator/{settings.VERSION}",
-        }
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key.strip()
-            headers["Authorization"] = f"Bearer {self.api_key.strip()}"
-        return headers
+    def _map_exception(self, exc: Exception) -> TinyFishError:
+        """Translates SDK, HTTPX, or system exceptions into typed TinyFishError."""
+        if isinstance(exc, TinyFishError):
+            return exc
+
+        msg = str(exc)
+
+        # 1. Authentication failures (HTTP 401, 403)
+        if isinstance(exc, (tinyfish.AuthenticationError, tinyfish.PermissionDeniedError)):
+            return TinyFishError(
+                kind="auth",
+                message=f"Authentication failed: {msg}",
+                retriable=False,
+                status_code=401,
+                secret_to_redact=self.api_key,
+            )
+
+        # 2. Rate limit (HTTP 429)
+        if isinstance(exc, tinyfish.RateLimitError):
+            return TinyFishError(
+                kind="rate_limit",
+                message=f"Rate limit exceeded: {msg}",
+                retriable=True,
+                status_code=429,
+                secret_to_redact=self.api_key,
+            )
+
+        # 3. Timeouts
+        if isinstance(
+            exc,
+            (
+                tinyfish.APITimeoutError,
+                tinyfish.RequestTimeoutError,
+                httpx.TimeoutException,
+            ),
+        ):
+            return TinyFishError(
+                kind="timeout",
+                message=f"Request timed out: {msg}",
+                retriable=True,
+                status_code=504,
+                secret_to_redact=self.api_key,
+            )
+
+        # 4. Server errors (HTTP 5xx)
+        if isinstance(exc, tinyfish.InternalServerError):
+            return TinyFishError(
+                kind="server",
+                message=f"Server error: {msg}",
+                retriable=True,
+                status_code=500,
+                secret_to_redact=self.api_key,
+            )
+
+        # 5. Generic HTTP status errors
+        if isinstance(exc, (tinyfish.APIStatusError, httpx.HTTPStatusError)):
+            status_code = getattr(
+                exc,
+                "status_code",
+                getattr(getattr(exc, "response", None), "status_code", 500),
+            )
+            if status_code in (401, 403):
+                return TinyFishError(
+                    kind="auth",
+                    message=f"Auth error ({status_code}): {msg}",
+                    retriable=False,
+                    status_code=status_code,
+                    secret_to_redact=self.api_key,
+                )
+            if status_code == 429:
+                return TinyFishError(
+                    kind="rate_limit",
+                    message=f"Rate limit ({status_code}): {msg}",
+                    retriable=True,
+                    status_code=status_code,
+                    secret_to_redact=self.api_key,
+                )
+            if status_code >= 500:
+                return TinyFishError(
+                    kind="server",
+                    message=f"Server error ({status_code}): {msg}",
+                    retriable=True,
+                    status_code=status_code,
+                    secret_to_redact=self.api_key,
+                )
+            return TinyFishError(
+                kind="bad_request",
+                message=f"Client error ({status_code}): {msg}",
+                retriable=False,
+                status_code=status_code,
+                secret_to_redact=self.api_key,
+            )
+
+        # Default fallback
+        return TinyFishError(
+            kind="bad_request",
+            message=f"Request error: {msg}",
+            retriable=False,
+            secret_to_redact=self.api_key,
+        )
 
     async def _execute_with_retry(
         self,
-        method: str,
-        url: str,
-        params: Optional[Dict[str, Any]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
-        custom_headers: Optional[Dict[str, str]] = None,
-    ) -> httpx.Response:
-        """Executes an HTTP request with automatic 1-retry on 429 rate-limit or 5xx error."""
-        headers = self._get_headers()
-        if custom_headers:
-            headers.update(custom_headers)
-
+        call_fn: Callable[[], Coroutine[Any, Any, Any]],
+        operation_name: str = "TinyFish call",
+    ) -> Any:
+        """Executes a function with exactly 1 retry on timeout, 5xx, or 429."""
         attempt = 0
-        last_error = None
-
         while attempt <= self.max_retries:
             attempt += 1
             try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.request(
-                        method=method,
-                        url=url,
-                        params=params,
-                        json=json_data,
-                        headers=headers,
-                    )
-
-                    # Check for rate limits (429)
-                    if response.status_code == 429:
-                        retry_after = float(response.headers.get("Retry-After", 1.0))
-                        logger.warning(
-                            f"TinyFish 429 Rate Limit encountered on {url}. "
-                            f"Attempt {attempt}/{self.max_retries + 1}. Retrying in {retry_after}s..."
-                        )
-                        if attempt <= self.max_retries:
-                            await asyncio.sleep(retry_after)
-                            continue
-                        raise TinyFishRateLimitError(
-                            "TinyFish API rate limit exceeded after retrying.",
-                            status_code=429,
-                            details=response.text,
-                        )
-
-                    # Check for auth errors (401, 403)
-                    if response.status_code in (401, 403):
-                        raise TinyFishAuthError(
-                            f"TinyFish authentication failed ({response.status_code}): Check TINYFISH_API_KEY.",
-                            status_code=response.status_code,
-                            details=response.text,
-                        )
-
-                    # Check for server errors (500, 502, 503, 504)
-                    if response.status_code >= 500:
-                        logger.warning(
-                            f"TinyFish server error ({response.status_code}) on {url}. "
-                            f"Attempt {attempt}/{self.max_retries + 1}."
-                        )
-                        if attempt <= self.max_retries:
-                            await asyncio.sleep(0.5)
-                            continue
-                        raise TinyFishError(
-                            f"TinyFish server error ({response.status_code}) after retry: {response.text}",
-                            status_code=response.status_code,
-                            details=response.text,
-                        )
-
-                    return response
-
-            except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-                last_error = exc
-                logger.warning(
-                    f"TinyFish network/timeout error on {url} (Attempt {attempt}/{self.max_retries + 1}): {exc}"
+                return await call_fn()
+            except Exception as exc:
+                err = self._map_exception(exc)
+                clean_log = redact_secrets(
+                    f"{operation_name} attempt {attempt}/{self.max_retries + 1} failed: {err.message}",
+                    self.api_key,
                 )
-                if attempt <= self.max_retries:
-                    await asyncio.sleep(0.5)
-                    continue
-                raise TinyFishError(
-                    f"TinyFish request failed after {self.max_retries + 1} attempts due to network/timeout: {exc}",
-                    status_code=504 if isinstance(exc, httpx.TimeoutException) else 502,
-                ) from exc
+                logger.warning(clean_log)
 
-        if last_error:
-            raise TinyFishError(f"TinyFish request failed: {last_error}") from last_error
-        raise TinyFishError("TinyFish request failed with unknown error.")
+                # Retry ONLY if retriable and attempts remain
+                if err.retriable and attempt <= self.max_retries:
+                    await asyncio.sleep(self.backoff_seconds)
+                    continue
+
+                # No retry for non-retriable (e.g. 401 auth, 400 bad request) or exhausted
+                raise err
 
     # ==========================================================================
-    # 1. Fetch API (Free Tier) — Section 1 signature: fetch(url)
+    # 1. Fetch API (Free Tier)
     # ==========================================================================
 
     async def fetch(
         self,
-        url: Union[str, List[str]],
-        format: str = "markdown",
-        purpose: Optional[str] = "Extract scam lure, contact info, and payment triggers",
-        links: bool = True,
-        image_links: bool = True,
-    ) -> Dict[str, Any]:
-        """Renders URLs via headless Chromium and returns clean markdown or structured content as parsed JSON/dict."""
-        urls = [url] if isinstance(url, str) else url
+        urls: str | list[str],
+        format: Literal["markdown", "html", "json"] = "markdown",
+        purpose: str | None = "Extract scam lure, contact info, and payment triggers",
+    ) -> dict[str, Any]:
+        """Free Tier: Renders pages via headless browser and extracts clean content."""
+        target_urls = [urls] if isinstance(urls, str) else urls
 
-        if not self.is_live_ready:
-            if self.mock_fallback:
-                mock_model = self._mock_fetch(urls, format)
-                return mock_model.model_dump()
-            raise TinyFishAuthError(
-                "TINYFISH_API_KEY is not configured and mock fallback is disabled."
-            )
-
-        try:
-            payload = {
-                "urls": urls,
-                "format": format,
-                "purpose": purpose,
-                "links": links,
-                "image_links": image_links,
-            }
-            response = await self._execute_with_retry(
-                method="POST",
-                url=self.fetch_url,
-                json_data=payload,
-            )
-            return response.json()
-
-        except TinyFishError:
-            raise
-        except Exception as err:
-            logger.error(f"TinyFish fetch failed for {urls}: {err}")
-            if self.mock_fallback:
-                logger.info(f"Falling back to mock fetch for {urls}")
-                return self._mock_fetch(urls, format).model_dump()
-            raise TinyFishError(f"TinyFish fetch failed: {err}") from err
-
-    # ==========================================================================
-    # 2. Search API (Free Tier) — Section 1 signature: search(query)
-    # ==========================================================================
-
-    async def search(self, query: str, limit: int = 5) -> Dict[str, Any]:
-        """Search the web for domain history, fraud indicators, or related scam footprints."""
-        if not self.is_live_ready:
-            if self.mock_fallback:
-                return self._mock_search(query).model_dump()
-            raise TinyFishAuthError(
-                "TINYFISH_API_KEY is not configured and mock fallback is disabled."
-            )
-
-        try:
-            url = f"{self.search_url}"
-            response = await self._execute_with_retry(
-                method="GET",
-                url=url,
-                params={"query": query, "limit": limit},
-            )
-            return response.json()
-
-        except TinyFishError:
-            raise
-        except Exception as err:
-            logger.error(f"TinyFish search failed for query '{query}': {err}")
-            if self.mock_fallback:
-                logger.info(f"Falling back to mock search for query '{query}'.")
-                return self._mock_search(query).model_dump()
-            raise TinyFishError(f"TinyFish search failed: {err}") from err
-
-    # ==========================================================================
-    # 3. Agent API (Paid Tier) — Section 1 signature: run_agent(payload)
-    # ==========================================================================
-
-    async def run_agent(self, payload: Union[Dict[str, Any], str]) -> Dict[str, Any]:
-        """Autonomously navigates and detonates suspicious page according to payload instructions."""
-        if isinstance(payload, str):
-            payload = {
-                "url": payload,
-                "goal": "Interact with scam portal, reach payment step, extract payee",
+        if not self.has_live_credentials and self.mock_fallback:
+            return {
+                "results": [
+                    {
+                        "url": u,
+                        "status": "success",
+                        "format": format,
+                        "content": (
+                            f"# Scam Portal Simulation\n\nTarget: {u}\n"
+                            "**URGENT**: Electricity disconnected in 2 hours! "
+                            "Pay bill fee immediately: upi://pay?pa=powerbill.recovery@okhdfcbank"
+                        ),
+                    }
+                    for u in target_urls
+                ]
             }
 
-        url = payload.get("url", "")
-        goal = payload.get("goal", "Interact with scam portal, reach payment step, extract payee")
-
-        if not self.is_live_ready:
-            if self.mock_fallback:
-                return self._mock_detonate(url, goal).model_dump()
-            raise TinyFishAuthError(
-                "TINYFISH_API_KEY is not configured and mock fallback is disabled."
+        async def _call() -> Any:
+            res = await self._sdk.fetch.get_contents(
+                urls=target_urls,
+                format=format,
+                purpose=purpose,
+            )
+            return (
+                res.model_dump()
+                if hasattr(res, "model_dump")
+                else (res if isinstance(res, dict) else {"results": res})
             )
 
-        try:
-            target_endpoint = f"{self.base_url}/v1/automation/run"
-            response = await self._execute_with_retry(
-                method="POST",
-                url=target_endpoint,
-                json_data=payload,
-            )
-            return response.json()
-
-        except TinyFishError:
-            raise
-        except Exception as err:
-            logger.error(f"TinyFish run_agent failed on {url}: {err}")
-            if self.mock_fallback:
-                logger.info(f"Falling back to mock detonation for {url}")
-                return self._mock_detonate(url, goal).model_dump()
-            raise TinyFishError(f"TinyFish run_agent failed: {err}") from err
-
-    # Alias for Section 5 detonation
-    async def detonate(self, url: str, goal: Optional[str] = None) -> TinyFishAgentResponse:
-        """Helper method returning typed TinyFishAgentResponse model."""
-        res_dict = await self.run_agent(
-            {"url": url, "goal": goal or "Detonate and extract payment payee"}
-        )
-        if "session_id" in res_dict and "extracted_data" in res_dict:
-            return TinyFishAgentResponse(**res_dict)
-        return TinyFishAgentResponse(
-            session_id=res_dict.get("session_id", str(uuid.uuid4())),
-            status="completed",
-            url=url,
-            goal=goal or "",
-            extracted_data=res_dict.get("result") or res_dict.get("extracted_data") or {},
-            final_url=res_dict.get("final_url", url),
-            redirect_chain=res_dict.get("redirect_chain", [url]),
-            events=[],
-            screenshots=res_dict.get("screenshots", []),
-            is_mock=res_dict.get("is_mock", False),
-        )
+        return await self._execute_with_retry(_call, operation_name="fetch")
 
     # ==========================================================================
-    # 4. Browser API (Paid Tier) — Section 1 signature: browser_session(url)
+    # 2. Search API (Free Tier)
     # ==========================================================================
 
-    async def browser_session(self, url: Optional[str] = None) -> Dict[str, Any]:
-        """Allocates a cloud-managed Chromium session for manual or automated inspection."""
-        if not self.is_live_ready:
-            if self.mock_fallback:
-                return self._mock_browser_session(url).model_dump()
-            raise TinyFishAuthError(
-                "TINYFISH_API_KEY is not configured and mock fallback is disabled."
-            )
-
-        try:
-            endpoint = f"{self.browser_url}/sessions"
-            payload = {"url": url} if url else {}
-            response = await self._execute_with_retry(
-                method="POST",
-                url=endpoint,
-                json_data=payload,
-            )
-            return response.json()
-
-        except TinyFishError:
-            raise
-        except Exception as err:
-            logger.error(f"TinyFish browser session allocation failed: {err}")
-            if self.mock_fallback:
-                return self._mock_browser_session(url).model_dump()
-            raise TinyFishError(f"TinyFish browser_session failed: {err}") from err
-
-    # ==========================================================================
-    # Free-Tier Verification (Section 3 Requirement)
-    # ==========================================================================
-
-    async def verify_free_tier(
+    async def search(
         self,
-        sample_url: str = "https://example.com",
-        sample_query: str = "electricity bill upi scam advisory",
-    ) -> TinyFishVerificationResult:
-        """Validates that Fetch and Search are working without consuming paid Detonation credits."""
-        mode = "live" if self.is_live_ready else "mock_fallback"
-        search_ok = "UNKNOWN"
-        fetch_ok = "UNKNOWN"
-        search_count = 0
-        fetch_len = 0
+        query: str,
+        location: str | None = None,
+        language: str | None = None,
+        limit: int = 5,
+    ) -> dict[str, Any]:
+        """Free Tier: Searches the web for fraud reports, threat intelligence, and footprints."""
+        if not self.has_live_credentials and self.mock_fallback:
+            return {
+                "query": query,
+                "location": location or "IN",
+                "results": [
+                    {
+                        "title": "Advisory: Electricity Bill Disconnection Scam",
+                        "url": "https://cybercrime.gov.in/advisories/power-bill-fraud",
+                        "snippet": "Advisory warning citizens against fake SMS lures demanding instant UPI payment for bill dues.",
+                    },
+                    {
+                        "title": "Mule Bank Accounts Identified in Fake Discom Racket",
+                        "url": "https://infosec-intel.in/reports/mule-ring-hdfc",
+                        "snippet": "Coordinated fraudulent campaigns directing funds to UPI IDs on @okhdfcbank.",
+                    },
+                ],
+            }
 
-        # 1. Test Search
-        try:
-            search_res = await self.search(query=sample_query, limit=3)
-            search_ok = "OK"
-            results_list = search_res.get("results", [])
-            search_count = len(results_list)
-        except Exception as e:
-            search_ok = f"FAILED: {e}"
-
-        # 2. Test Fetch
-        try:
-            fetch_res = await self.fetch(url=sample_url, format="markdown")
-            fetch_ok = "OK"
-            raw_items = fetch_res.get("results", [])
-            if raw_items:
-                content = raw_items[0].get("content", "")
-                fetch_len = len(content)
-        except Exception as e:
-            fetch_ok = f"FAILED: {e}"
-
-        ready = search_ok == "OK" and fetch_ok == "OK"
-        msg = (
-            "TinyFish client operational in LIVE mode."
-            if (ready and self.is_live_ready)
-            else (
-                "TinyFish operational in MOCK FALLBACK mode. Set TINYFISH_API_KEY in .env to switch to live."
-                if ready
-                else "TinyFish verification failed."
+        async def _call() -> Any:
+            res = await self._sdk.search.query(
+                query=query,
+                location=location,
+                language=language,
             )
-        )
+            return (
+                res.model_dump()
+                if hasattr(res, "model_dump")
+                else (res if isinstance(res, dict) else {"results": res})
+            )
 
-        return TinyFishVerificationResult(
-            client_ready=ready,
-            api_key_configured=self.is_live_ready,
-            mode=mode,
-            fetch_status=fetch_ok,
-            search_status=search_ok,
-            sample_search_query=sample_query,
-            sample_search_result_count=search_count,
-            sample_fetch_url=sample_url,
-            sample_fetch_length=fetch_len,
-            message=msg,
-        )
+        return await self._execute_with_retry(_call, operation_name="search")
 
     # ==========================================================================
-    # Realistic Mock Engines (For Zero-Cost Development & Demonstrations)
+    # 3. Agent API (Paid Tier)
     # ==========================================================================
 
-    def _mock_search(self, query: str) -> TinyFishSearchResponse:
-        """Returns realistic simulated fraud OSINT search results."""
-        results = [
-            TinyFishSearchResult(
-                title="CERT-In Advisory: Phishing Campaigns Impersonating State Power Distribution Companies",
-                url="https://www.cert-in.org.in/advisories/CI-2024-0089.html",
-                snippet="Fraudsters circulating SMS lures claiming immediate electricity disconnection unless payment is made via provided link or APK download.",
-                rank=1,
-            ),
-            TinyFishSearchResult(
-                title="Cyber Crime Portal Alert: Fake UPI QR Codes & Malicious Payment Links",
-                url="https://cybercrime.gov.in/threat-feed/fake-electricity-bills",
-                snippet="Reported campaigns redirecting victims to cloned payment gateways capturing UPI PINs and routing funds to mule bank accounts.",
-                rank=2,
-            ),
-            TinyFishSearchResult(
-                title="UPI Mule Account Telemetry Database — Matched Fraud Vectors",
-                url="https://threatintel.local/payees/mule-cluster-77",
-                snippet="Active campaign targeting Mumbai & Delhi consumers. Correlated payees identified across multiple SMS lure domains.",
-                rank=3,
-            ),
-        ]
-        return TinyFishSearchResponse(
-            query=query,
-            total_results=len(results),
-            results=results,
-            is_mock=True,
-        )
+    async def run_agent(
+        self,
+        url: str,
+        goal: str,
+        output_schema: dict[str, Any] | None = None,
+        browser_profile: str = "stealth",
+        proxy_country: str | None = "IN",
+        max_steps: int = 40,
+        max_seconds: int = 180,
+    ) -> AgentRun:
+        """Paid Tier: Autonomously navigates and detonates suspicious funnel as a synthetic victim."""
+        # 1. Trigger before_paid_call hook (budget / permission check)
+        if self.before_paid_call:
+            await self.before_paid_call()
 
-    def _mock_fetch(self, urls: List[str], format: str) -> TinyFishFetchResponse:
-        """Returns realistic simulated phishing landing page markdown."""
-        target_url = urls[0] if urls else "https://quick-electricity-billpay.biz"
-        content = """# URGENT NOTICE: IMMEDIATE POWER DISCONNECTION SCHEDULED
-
-Your electricity connection will be suspended tonight at 9:30 PM due to an unpaid balance of **INR 1,840.00** on your consumer number.
-
-### How to Prevent Disconnection:
-1. Tap the quick payment button below to verify your meter ID.
-2. Complete settlement using any authorized UPI application (PhonePe, GPay, Paytm).
-3. Download the official power utility emergency support APK for 24/7 billing updates.
-
-*Note: Cash or physical counter payments are currently unavailable.*
-
-[PAY OVERDUE BILL NOW](https://payment-gateway-gateway.xyz/checkout?ref=mule8839) | [DOWNLOAD HELPDESK APK](https://cdn-storage-cdn.net/dl/bses-support-v2.apk)
-"""
-        return TinyFishFetchResponse(
-            results=[
-                TinyFishFetchItem(
-                    url=target_url,
-                    status_code=200,
-                    content=content,
-                    title="Urgent Power Bill Settlement Portal",
-                    links=[
-                        "https://payment-gateway-gateway.xyz/checkout?ref=mule8839",
-                        "https://cdn-storage-cdn.net/dl/bses-support-v2.apk",
+        if not self.has_live_credentials and self.mock_fallback:
+            return AgentRun(
+                run_id="run-mock-detonate-01",
+                status="COMPLETED",
+                result={
+                    "payee_upi": "discom.powerbilling@okhdfcbank",
+                    "bank_account": "50200083921901",
+                    "wallet": None,
+                    "qr_visible": True,
+                    "qr_payload_text": "upi://pay?pa=discom.powerbilling@okhdfcbank&pn=ElectricityBill&am=499",
+                    "amount_requested": 499.0,
+                    "brand_claimed": "State Electricity Board",
+                    "funnel_steps": [
+                        "Visited landing lure",
+                        "Filled dummy contact information",
+                        "Reached payment modal",
+                        "Intercepted payee UPI handle before payment",
                     ],
-                    image_links=["https://quick-electricity-billpay.biz/assets/official-seal.png"],
-                    redirect_chain=[
-                        target_url,
-                        "https://redirector.net/hop/3991",
-                        "https://payment-gateway-gateway.xyz/checkout?ref=mule8839",
-                    ],
-                )
-            ],
-            is_mock=True,
-        )
+                    "blocked_reason": None,
+                    "final_url": "https://payment-gateway-sim.biz/checkout",
+                },
+                streaming_url="https://agent.tinyfish.ai/live/stream-mock-detonate",
+                browser_config={
+                    "profile": browser_profile,
+                    "proxy_country": proxy_country,
+                    "max_steps": max_steps,
+                    "max_seconds": max_seconds,
+                },
+                error=None,
+                raw={"simulated": True},
+            )
 
-    def _mock_detonate(self, url: str, goal: str) -> TinyFishAgentResponse:
-        """Simulates autonomous detonation through the scam lure to extract mule payee."""
-        now = datetime.now(timezone.utc).isoformat()
-        session_id = f"mock-det-{uuid.uuid4().hex[:12]}"
+        async def _call() -> AgentRun:
+            # Build configuration parameters compatible with SDK
+            agent_config = {
+                "max_steps": max_steps,
+                "max_duration_seconds": max_seconds,
+            }
+            proxy_config = (
+                {"enabled": True, "country_code": proxy_country} if proxy_country else None
+            )
 
-        events = [
-            TinyFishAgentEvent(
-                event_type="NAVIGATION",
-                step_number=1,
-                action=f"Loaded initial URL: {url}",
-                thought="Observed redirection headers. Following hop chain through shortener.",
-                timestamp=now,
-            ),
-            TinyFishAgentEvent(
-                event_type="FORM_INTERACTION",
-                step_number=2,
-                action="Entered synthetic consumer number '9820011223' and clicked 'Submit'",
-                thought="Page generated dynamic invoice checkout with embedded UPI collect request.",
-                timestamp=now,
-            ),
-            TinyFishAgentEvent(
-                event_type="PAYMENT_DETONATION",
-                step_number=3,
-                action="Intercepted checkout QR and UPI intent URI: upi://pay?pa=powerbill.recovery@okhdfcbank&pn=UtilityBillingServices&am=1840.00",
-                thought="Extracted primary scam payee VPA 'powerbill.recovery@okhdfcbank' and merchant title 'UtilityBillingServices'.",
-                screenshot_url="https://mock-evidence.sting/screenshots/payment-modal.png",
-                timestamp=now,
-            ),
-        ]
+            res = await self._sdk.agent.run(
+                url=url,
+                goal=goal,
+                output_schema=output_schema,
+                browser_profile=browser_profile,
+                proxy_config=proxy_config,
+                agent_config=agent_config,
+            )
 
-        extracted = {
-            "payee_vpa": "powerbill.recovery@okhdfcbank",
-            "merchant_name": "UtilityBillingServices",
-            "amount_demanded": 1840.00,
-            "currency": "INR",
-            "psp": "HDFC Bank",
-            "mule_cluster_id": "MULE-CLUSTER-IN-409",
-            "scam_type": "ELECTRICITY_BILL_URGENCY_FRAUD",
-            "malicious_apk_url": "https://cdn-storage-cdn.net/dl/bses-support-v2.apk",
-            "final_host": "payment-gateway-gateway.xyz",
-        }
+            res_dict = res.model_dump() if hasattr(res, "model_dump") else res
+            status_val = (
+                res_dict.get("status", "COMPLETED").upper()
+                if isinstance(res_dict, dict)
+                else "COMPLETED"
+            )
+            run_id = (
+                res_dict.get("run_id", "run-live") if isinstance(res_dict, dict) else "run-live"
+            )
 
-        return TinyFishAgentResponse(
-            session_id=session_id,
-            status="completed",
+            result_data = None
+            if isinstance(res_dict, dict):
+                for k in ("result", "extracted_data", "output"):
+                    if k in res_dict and res_dict[k] is not None:
+                        result_data = res_dict[k]
+                        break
+
+            stream_url = res_dict.get("streaming_url") if isinstance(res_dict, dict) else None
+
+            # Never re-run or retry an Agent run that COMPLETED, even with empty result
+            return AgentRun(
+                run_id=run_id,
+                status=status_val,
+                result=result_data,
+                streaming_url=stream_url,
+                browser_config={
+                    "profile": browser_profile,
+                    "proxy": proxy_country,
+                },
+                error=res_dict.get("error") if isinstance(res_dict, dict) else None,
+                raw=res_dict if isinstance(res_dict, dict) else {},
+            )
+
+        return await self._execute_with_retry(_call, operation_name="run_agent")
+
+    async def stream_agent(
+        self,
+        url: str,
+        goal: str,
+        browser_profile: str = "stealth",
+        proxy_country: str | None = "IN",
+        output_schema: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Paid Tier: Streams live execution events from autonomous browser session."""
+        if self.before_paid_call:
+            await self.before_paid_call()
+
+        if not self.has_live_credentials and self.mock_fallback:
+            yield {
+                "type": "status",
+                "stage": "starting",
+                "message": f"Launching browser session for {url}",
+            }
+            await asyncio.sleep(0.05)
+            yield {
+                "type": "event",
+                "stage": "navigating",
+                "message": "Navigated to target portal",
+            }
+            await asyncio.sleep(0.05)
+            yield {
+                "type": "event",
+                "stage": "extracting",
+                "message": "Intercepted checkout UPI payee",
+            }
+            return
+
+        stream = await self._sdk.agent.stream(
             url=url,
             goal=goal,
-            extracted_data=extracted,
-            final_url="https://payment-gateway-gateway.xyz/checkout?ref=mule8839",
-            redirect_chain=[
-                url,
-                "https://redirector.net/hop/3991",
-                "https://payment-gateway-gateway.xyz/checkout?ref=mule8839",
-            ],
-            events=events,
-            screenshots=[
-                "https://mock-evidence.sting/screenshots/landing-page.png",
-                "https://mock-evidence.sting/screenshots/payment-modal.png",
-            ],
-            is_mock=True,
+            browser_profile=browser_profile,
+            output_schema=output_schema,
         )
+        async for event in stream:
+            yield (
+                event.model_dump()
+                if hasattr(event, "model_dump")
+                else (event if isinstance(event, dict) else {"event": str(event)})
+            )
 
-    def _mock_browser_session(self, url: Optional[str]) -> TinyFishBrowserSession:
-        """Returns mock cloud browser CDP endpoint."""
-        session_id = f"mock-session-{uuid.uuid4().hex[:8]}"
-        return TinyFishBrowserSession(
-            session_id=session_id,
-            cdp_url=f"wss://api.browser.tinyfish.ai/devtools/page/{session_id}",
-            initial_url=url,
-            status="active",
-            created_at=datetime.now(timezone.utc).isoformat(),
-            is_mock=True,
-        )
+    # ==========================================================================
+    # 4. Runs & Browser API
+    # ==========================================================================
+
+    async def get_run(self, run_id: str) -> AgentRun:
+        """Retrieves status and results of a previous agent run by ID."""
+
+        async def _call() -> AgentRun:
+            res = await self._sdk.runs.get(run_id)
+            res_dict = res.model_dump() if hasattr(res, "model_dump") else res
+            result_data = None
+            if isinstance(res_dict, dict):
+                for k in ("result", "extracted_data", "output"):
+                    if k in res_dict and res_dict[k] is not None:
+                        result_data = res_dict[k]
+                        break
+            return AgentRun(
+                run_id=run_id,
+                status=(
+                    res_dict.get("status", "COMPLETED").upper()
+                    if isinstance(res_dict, dict)
+                    else "COMPLETED"
+                ),
+                result=result_data,
+                streaming_url=(
+                    res_dict.get("streaming_url") if isinstance(res_dict, dict) else None
+                ),
+                error=res_dict.get("error") if isinstance(res_dict, dict) else None,
+                raw=res_dict if isinstance(res_dict, dict) else {},
+            )
+
+        return await self._execute_with_retry(_call, operation_name="get_run")
+
+    async def create_browser_session(self, url: str | None = None) -> dict[str, Any]:
+        """Paid Tier: Allocates cloud Chromium browser session for live investigation."""
+        if self.before_paid_call:
+            await self.before_paid_call()
+
+        if not self.has_live_credentials and self.mock_fallback:
+            return {
+                "session_id": "session-mock-cloud-cdp",
+                "cdp_url": "wss://browser.tinyfish.ai/cdp/mock-session",
+                "live_view_url": "https://browser.tinyfish.ai/view/mock-session",
+            }
+
+        async def _call() -> Any:
+            res = await self._sdk.browser.sessions.create(url=url)
+            return res.model_dump() if hasattr(res, "model_dump") else res
+
+        return await self._execute_with_retry(_call, operation_name="create_browser_session")
 
 
-# Singleton instance ready for injection across backend services
+# Global instance
 tinyfish_client = TinyFishClient()
