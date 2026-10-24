@@ -97,6 +97,10 @@ class Settings(BaseSettings):
         default="inprocess",
         description="Pipeline execution runner: inprocess | arq",
     )
+    MAX_CONCURRENT_CASES: int = Field(
+        default=3,
+        description="Maximum concurrent active pipeline executions",
+    )
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
