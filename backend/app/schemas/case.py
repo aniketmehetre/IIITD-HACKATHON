@@ -109,6 +109,43 @@ class ErrorResponse(BaseModel):
     code: Optional[str] = None
 
 
+# Shared API Contract Result Component
+class ResultPayee(BaseModel):
+    upi_vpa: str = Field(..., json_schema_extra={"example": "discom.powerbilling@okhdfcbank"})
+    psp_name: str = Field(..., json_schema_extra={"example": "HDFC Bank (Google Pay)"})
+    bank_account: Optional[str] = Field(
+        default=None, json_schema_extra={"example": "50200083921901"}
+    )
+    ifsc: Optional[str] = Field(default=None, json_schema_extra={"example": "HDFC0001234"})
+    wallet_address: Optional[str] = Field(default=None)
+
+
+class ResultCluster(BaseModel):
+    cluster_id: str = Field(..., json_schema_extra={"example": "cluster-electricity-mules-north"})
+    size: int = Field(..., json_schema_extra={"example": 5})
+    shared_identifiers: List[str] = Field(
+        default_factory=list,
+        json_schema_extra={"example": ["discom.powerbilling@okhdfcbank", "103.21.58.12"]},
+    )
+
+
+class ResultDrafts(BaseModel):
+    i4c_complaint: str
+    bank_alert: Dict[str, Any] = Field(default_factory=dict)
+    cert_in_advisory: Dict[str, Any] = Field(default_factory=dict)
+
+
+class InvestigationResult(BaseModel):
+    """Investigation outcome and forensic dossier conforming to Result in api-schema.yaml."""
+
+    case_id: str
+    payee: ResultPayee
+    attribution: Literal["confirmed", "inferred"] = "confirmed"
+    cluster: ResultCluster
+    evidence_hash: str
+    drafts: ResultDrafts
+
+
 # Legacy / Additional helpers for contract compatibility
 class PayeeInfo(BaseModel):
     id: str
