@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Navbar, ViewMode } from "@/components/Navbar";
 import { StageProgressRail } from "@/components/StageProgressRail";
 import { CaseSubmissionBar } from "@/components/CaseSubmissionBar";
+import { IntakeStagePanel } from "@/components/stages/IntakeStagePanel";
 import { api } from "@/lib/api";
 import { CaseSummary, InputType, PipelineStage } from "@/lib/types";
 import { 
@@ -100,28 +101,7 @@ export default function Home() {
             {/* Stage Anchor Panels */}
             <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
               {/* STAGE 1: INTAKE */}
-              <section id="stage-intake" className="glass-panel" style={{ padding: "28px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "var(--accent-cyan-dim)", border: "1px solid var(--border-cyan)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Terminal size={18} color="var(--accent-cyan)" />
-                    </div>
-                    <div>
-                      <h3 className="font-display" style={{ fontSize: "18px" }}>Stage 01: Case Intake & Telemetry</h3>
-                      <p className="text-muted font-mono" style={{ fontSize: "12px" }}>Validated target lure ingestion</p>
-                    </div>
-                  </div>
-                  <span className="cyber-badge cyber-badge-green">PASSED</span>
-                </div>
-                <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "8px", padding: "14px", border: "1px solid rgba(255,255,255,0.04)" }}>
-                  <p className="font-mono" style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                    <span className="text-cyan">INGESTED_TARGET:</span> {activeCase?.target}
-                  </p>
-                  <p className="font-mono text-muted" style={{ fontSize: "11px", marginTop: "4px" }}>
-                    TIMESTAMP: {activeCase?.created_at} &bull; INPUT_TYPE: {activeCase?.type.toUpperCase()}
-                  </p>
-                </div>
-              </section>
+              {activeCase && <IntakeStagePanel caseData={activeCase} />}
 
               {/* STAGE 2: TRIAGE */}
               <section id="stage-triage" className="glass-panel" style={{ padding: "28px" }}>
