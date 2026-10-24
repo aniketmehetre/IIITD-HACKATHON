@@ -1,0 +1,44 @@
+{
+  "id": "c-8f2a1b9c-44e2-411a-8219-bf98c52ad001",
+  "input_type": "link",
+  "raw_input": "https://electricity-bill-recovery.biz/pay?id=83921",
+  "status": "detonating",
+  "outcome": null,
+  "streaming_url": "https://agent.tinyfish.ai/live/stream-983120",
+  "recent_events": [
+    {
+      "id": "evt-001",
+      "stage": "intake",
+      "message": "Candidate URL ingested and validated.",
+      "timestamp": "2026-10-24T12:00:01Z",
+      "level": "info",
+      "metadata": {
+        "origin": "telegram_tip"
+      }
+    },
+    {
+      "id": "evt-002",
+      "stage": "triage",
+      "message": "RDAP query returned domain age 3 days; suspicious brand mismatch with Tata Power.",
+      "timestamp": "2026-10-24T12:00:04Z",
+      "level": "warning",
+      "metadata": {
+        "domain_age_days": 3,
+        "brand_match": "Tata Power"
+      }
+    },
+    {
+      "id": "evt-003",
+      "stage": "detonating",
+      "message": "Spawning TinyFish synthetic victim browser on India mobile proxy.",
+      "timestamp": "2026-10-24T12:00:10Z",
+      "level": "info",
+      "metadata": {
+        "proxy": "IN",
+        "profile": "stealth"
+      }
+    }
+  ],
+  "created_at": "2026-10-24T12:00:00Z",
+  "updated_at": "2026-10-24T12:00:10Z"
+}

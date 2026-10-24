@@ -1,0 +1,45 @@
+{
+  "nodes": [
+    {
+      "data": {
+        "id": "node-vpa-1",
+        "label": "discom.powerbilling@okhdfcbank",
+        "type": "payee"
+      }
+    },
+    {
+      "data": {
+        "id": "node-domain-1",
+        "label": "electricity-bill-recovery.biz",
+        "type": "domain"
+      }
+    },
+    {
+      "data": {
+        "id": "node-domain-2",
+        "label": "tata-power-billpay.link",
+        "type": "domain"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "data": {
+        "id": "edge-1",
+        "source": "node-domain-1",
+        "target": "node-vpa-1",
+        "relationship": "funnel_destination"
+      }
+    },
+    {
+      "data": {
+        "id": "edge-2",
+        "source": "node-domain-2",
+        "target": "node-vpa-1",
+        "relationship": "funnel_destination"
+      }
+    }
+  ],
+  "total_clusters": 1,
+  "total_cases_linked": 2
+}
