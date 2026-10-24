@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>ExampleMart — Voucher Processing Fee</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fff8f0; color: #333; margin: 0; padding: 20px; text-align: center; }
+    .card { max-width: 480px; margin: 40px auto; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 10px 25px rgba(230,81,0,0.1); border: 2px solid #ffcc80; }
+    h2 { color: #e65100; font-size: 22px; margin-top: 0; }
+    .amount { font-size: 32px; font-weight: 800; color: #2e7d32; margin: 12px 0; }
+    .upi-box { background: #f5f5f5; border: 1px dashed #e65100; border-radius: 8px; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 16px; font-weight: bold; color: #d84315; word-break: break-all; }
+    .qr-container { margin: 20px 0; }
+    .qr-img { width: 180px; height: 180px; border: 1px solid #ddd; border-radius: 8px; padding: 8px; background: white; }
+    .alert { background: #fff3e0; color: #e65100; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+    footer { margin-top: 32px; font-size: 11px; color: #777; border-top: 1px solid #eee; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Complete Final Registration</h2>
+    <div class="alert">⚠️ Nominal ₹49 activation fee required to credit ₹5,000 instantly.</div>
+    <div class="amount">₹ 49.00</div>
+    
+    <p style="font-size: 14px; color: #666;">Scan QR or pay directly to UPI VPA:</p>
+    <div class="upi-box" id="payee-vpa">rewards.payout@stingtest</div>
+
+    <div class="qr-container">
+      <svg class="qr-img" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <!-- Stylized dummy QR code with positioning markers -->
+        <rect width="100" height="100" fill="#ffffff"/>
+        <rect x="10" y="10" width="24" height="24" fill="#000000"/>
+        <rect x="14" y="14" width="16" height="16" fill="#ffffff"/>
+        <rect x="18" y="18" width="8" height="8" fill="#000000"/>
+        
+        <rect x="66" y="10" width="24" height="24" fill="#000000"/>
+        <rect x="70" y="14" width="16" height="16" fill="#ffffff"/>
+        <rect x="74" y="18" width="8" height="8" fill="#000000"/>
+
+        <rect x="10" y="66" width="24" height="24" fill="#000000"/>
+        <rect x="14" y="70" width="16" height="16" fill="#ffffff"/>
+        <rect x="18" y="74" width="8" height="8" fill="#000000"/>
+
+        <rect x="42" y="15" width="16" height="6" fill="#000000"/>
+        <rect x="40" y="40" width="20" height="20" fill="#000000"/>
+        <rect x="45" y="45" width="10" height="10" fill="#ffffff"/>
+        <rect x="68" y="48" width="8" height="26" fill="#000000"/>
+        <rect x="48" y="72" width="14" height="14" fill="#000000"/>
+      </svg>
+    </div>
+
+    <p style="font-size: 13px; color: #888;">UPI Intent URI: <code>upi://pay?pa=rewards.payout@stingtest&pn=ExampleMart&am=49</code></p>
+
+    <footer>
+      Synthetic STING test funnel - not a real service. Do not pay.
+    </footer>
+  </div>
+</body>
+</html>

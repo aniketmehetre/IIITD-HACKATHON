@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>QuickRecharge — SIM Verification</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; text-align: center; }
+    .container { max-width: 480px; margin: 40px auto; background: #1e293b; border-radius: 18px; padding: 32px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); border: 1px solid #334155; text-align: left; }
+    h2 { color: #38bdf8; font-size: 20px; margin-top: 0; text-align: center; }
+    label { font-size: 13px; font-weight: 600; color: #94a3b8; display: block; margin-top: 14px; }
+    select, input { width: 100%; box-sizing: border-box; padding: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; margin-top: 6px; font-size: 15px; color: white; }
+    .btn { display: block; width: 100%; box-sizing: border-box; background: #0284c7; color: white; padding: 14px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px; margin-top: 24px; border: none; cursor: pointer; text-align: center; }
+    .btn:hover { background: #0ea5e9; }
+    footer { margin-top: 32px; font-size: 11px; color: #64748b; border-top: 1px solid #334155; padding-top: 16px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Select Your Telecom Operator</h2>
+    <form action="pay.html" method="GET">
+      <label for="operator">Operator Name</label>
+      <select id="operator" name="operator" required>
+        <option value="jio">Jio Prepaid</option>
+        <option value="airtel">Airtel Prepaid</option>
+        <option value="vi">Vi Prepaid</option>
+        <option value="bsnl">BSNL Mobile</option>
+      </select>
+
+      <label for="mobile">10-Digit Mobile Number</label>
+      <input type="tel" id="mobile" name="mobile" placeholder="9876543210" pattern="[0-9]{10}" required>
+
+      <button type="submit" class="btn">Proceed to Network Allocation &rarr;</button>
+    </form>
+    <footer>
+      Synthetic STING test funnel - not a real service. Do not pay.
+    </footer>
+  </div>
+</body>
+</html>
