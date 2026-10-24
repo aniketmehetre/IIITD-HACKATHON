@@ -1,0 +1,16 @@
+{
+  "query": "UPI scam",
+  "location": "IN",
+  "results": [
+    {
+      "title": "Advisory: Electricity Bill Disconnection Scam",
+      "url": "https://cybercrime.gov.in/advisories/power-bill-fraud",
+      "snippet": "Advisory warning citizens against fake SMS lures demanding instant UPI payment for bill dues."
+    },
+    {
+      "title": "Mule Bank Accounts Identified in Fake Discom Racket",
+      "url": "https://infosec-intel.in/reports/mule-ring-hdfc",
+      "snippet": "Coordinated fraudulent campaigns directing funds to UPI IDs on @okhdfcbank."
+    }
+  ]
+}

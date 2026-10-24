@@ -1,0 +1,10 @@
+{
+  "results": [
+    {
+      "url": "https://example.com",
+      "status": "success",
+      "format": "markdown",
+      "content": "# Scam Portal Simulation\n\nTarget: https://example.com\n**URGENT**: Electricity disconnected in 2 hours! Pay bill fee immediately: upi://pay?pa=powerbill.recovery@okhdfcbank"
+    }
+  ]
+}
