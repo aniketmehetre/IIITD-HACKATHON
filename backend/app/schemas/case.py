@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Contract Enums
 CaseStatusType = Literal[
@@ -35,8 +35,8 @@ OutcomeType = Literal[
 class CaseCreateRequest(BaseModel):
     """Payload for POST /cases."""
 
-    input_type: Literal["link", "message"] = Field(
-        ..., description="Input channel type: link or unstructured message"
+    input_type: Literal["link", "message", "url", "qr"] = Field(
+        default="link", description="Input channel type: link, message, url, or qr"
     )
     raw_input: str = Field(
         ...,
@@ -47,6 +47,22 @@ class CaseCreateRequest(BaseModel):
         default=False,
         description="Bypass 24-hour deduplication cache and force fresh detonation",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Support frontend format: { type, content }
+            if "type" in data and "input_type" not in data:
+                t = str(data["type"]).lower()
+                data["input_type"] = "link" if t == "url" else t
+            elif "input_type" in data:
+                t = str(data["input_type"]).lower()
+                data["input_type"] = "link" if t == "url" else t
+
+            if "content" in data and "raw_input" not in data:
+                data["raw_input"] = str(data["content"])
+        return data
 
 
 class StageEvent(BaseModel):
@@ -140,10 +156,16 @@ class InvestigationResult(BaseModel):
 
     case_id: str
     payee: ResultPayee
-    attribution: Literal["confirmed", "inferred"] = "confirmed"
+    attribution: Literal["confirmed", "inferred", "probable", "benign"] = "confirmed"
     cluster: ResultCluster
     evidence_hash: str
     drafts: ResultDrafts
+    triage: Optional[Dict[str, Any]] = None
+    detonation: Optional[Dict[str, Any]] = None
+    enrichment: Optional[Dict[str, Any]] = None
+    evidence_url: Optional[str] = None
+    approved: Optional[bool] = None
+    approved_at: Optional[str] = None
 
 
 # Legacy / Additional helpers for contract compatibility

@@ -41,8 +41,8 @@ export function ActStagePanel({ caseData }: ActStagePanelProps) {
   const handleVerifySeal = async () => {
     setIsVerifying(true);
     try {
-      await api.verifyEvidenceSeal(evidenceHash);
-      setIsSealVerified(true);
+      const res = await api.verifyEvidenceSeal(evidenceHash, caseData.id);
+      setIsSealVerified(res.valid);
     } catch (e) {
       console.error(e);
     } finally {
@@ -118,8 +118,26 @@ export function ActStagePanel({ caseData }: ActStagePanelProps) {
           </div>
         </div>
 
-        {/* Approval State Badge */}
-        <div>
+        {/* Actions & Badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <a
+            href={api.getEvidencePdfUrl(caseData.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="cyber-button-primary"
+            style={{
+              padding: "6px 14px",
+              fontSize: "11px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              textDecoration: "none"
+            }}
+          >
+            <Download size={13} />
+            <span>DOWNLOAD FORENSIC PDF</span>
+          </a>
+
           {approvalStatus ? (
             <span className="cyber-badge cyber-badge-green" style={{ fontSize: "11px", padding: "6px 12px" }}>
               <CheckCircle2 size={13} />

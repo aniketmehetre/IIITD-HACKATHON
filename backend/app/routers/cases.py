@@ -17,7 +17,9 @@ import logging
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
+
+from pydantic import BaseModel
 
 from fastapi import (
     APIRouter,
@@ -597,27 +599,66 @@ async def get_case_result(
             detail=f"Investigation result not yet ready. Case is currently in '{case_obj.status}'.",
         )
 
-    vpa = case_obj.input_payee or "discom.powerbilling@okhdfcbank"
+    # Fetch events for this case to populate actual stage results
+    ev_stmt = select(CaseEvent).where(CaseEvent.case_id == case_uuid).order_by(CaseEvent.id.asc())
+    ev_res = await db.execute(ev_stmt)
+    events = list(ev_res.scalars().all())
+
+    triage_data = None
+    detonation_data = None
+    enrichment_data = None
+    correlation_data = None
+
+    for ev in events:
+        if ev.stage == "triage" and ev.data:
+            triage_data = ev.data
+        elif ev.stage == "detonation" and ev.data:
+            detonation_data = ev.data
+        elif ev.stage == "enrichment" and ev.data:
+            enrichment_data = ev.data
+        elif ev.stage == "correlation" and ev.data:
+            correlation_data = ev.data
+
+    # Extract dynamic or fallback payee details
+    vpa = case_obj.input_payee
+    if not vpa and enrichment_data and enrichment_data.get("normalized_payees"):
+        vpa = enrichment_data["normalized_payees"][0]
+    if not vpa and detonation_data and detonation_data.get("extracted_payee"):
+        vpa = detonation_data["extracted_payee"]
+    if not vpa:
+        vpa = "discom.powerbilling@okhdfcbank"
+
+    psp = (enrichment_data.get("psp_name") if enrichment_data else None) or "HDFC Bank (Google Pay)"
+    ifsc = (enrichment_data.get("ifsc") if enrichment_data else None) or "HDFC0001234"
+    bank_acc = (enrichment_data.get("bank_account") if enrichment_data else None) or "50200083921901"
+
+    cluster_id = (correlation_data.get("cluster_id") if correlation_data else None) or "cluster-electricity-mules-north"
     attribution = (
-        "confirmed" if case_obj.outcome in ("confirmed_scam", "payee_extracted") else "inferred"
+        "confirmed"
+        if (case_obj.outcome in ("confirmed_scam", "payee_extracted") or (correlation_data and correlation_data.get("attribution") == "confirmed"))
+        else "inferred"
     )
 
     return InvestigationResult(
         case_id=str(case_obj.id),
         payee=ResultPayee(
             upi_vpa=vpa,
-            psp_name="HDFC Bank (Google Pay)",
-            bank_account="50200083921901",
-            ifsc="HDFC0001234",
+            psp_name=psp,
+            bank_account=bank_acc,
+            ifsc=ifsc,
             wallet_address=None,
         ),
         attribution=attribution,
         cluster=ResultCluster(
-            cluster_id="cluster-electricity-mules-north",
+            cluster_id=cluster_id,
             size=5,
             shared_identifiers=[vpa, "103.21.58.12"],
         ),
         evidence_hash=case_obj.evidence_hash or "a3b2c1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+        evidence_url=f"/cases/{case_obj.id}/evidence",
+        triage=triage_data,
+        detonation=detonation_data,
+        enrichment=enrichment_data,
         drafts=ResultDrafts(
             i4c_complaint=f"Cyber Fraud Report: Fraudulent electricity bill lure targeting HDFC account with VPA {vpa}.",
             bank_alert={
@@ -631,3 +672,56 @@ async def get_case_result(
             },
         ),
     )
+
+
+class ApproveReportRequest(BaseModel):
+    approved: bool = True
+    acknowledge_inferred: bool = True
+    notes: Optional[str] = None
+
+
+@router.post("/{id}/approve-report")
+async def approve_case_report(
+    id: str,
+    payload: ApproveReportRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Human investigator sign-off for takedown and freeze dispatch."""
+    try:
+        case_uuid = uuid.UUID(id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Case '{id}' not found.")
+
+    res = await db.execute(select(Case).where(Case.id == case_uuid))
+    case_obj = res.scalar_one_or_none()
+    if not case_obj:
+        raise HTTPException(status_code=404, detail=f"Case '{id}' not found.")
+
+    now = datetime.now(timezone.utc)
+    case_obj.status = "done" if payload.approved else "rejected"
+    case_obj.updated_at = now
+
+    event = CaseEvent(
+        case_id=case_obj.id,
+        stage="act",
+        kind="info" if payload.approved else "warn",
+        message=(
+            "Investigator approved and authorized takedown orders."
+            if payload.approved
+            else "Investigator dismissed report."
+        ),
+        data={"approved": payload.approved, "notes": payload.notes},
+    )
+    db.add(event)
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": (
+            "Lien order & CERT-In takedown dispatched to nodal desks."
+            if payload.approved
+            else "Report dismissed by investigator."
+        ),
+        "timestamp": now.isoformat(),
+    }
+

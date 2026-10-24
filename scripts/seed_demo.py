@@ -30,6 +30,7 @@ from app.agents.correlation import add_case_to_graph
 from app.agents.fingerprint import Fingerprint, compute_simhash
 from app.config import Settings, get_settings
 from app.db import create_engine_and_session
+from app.models.base import Base
 from app.models.case import Case, CaseEvent, utc_now
 from app.models.graph import Edge, Payee, Site
 from app.pipeline import InProcessRunner
@@ -259,8 +260,11 @@ def main() -> None:
         sys.exit(1)
 
     if args.synthetic_db:
-        _, session_factory = create_engine_and_session()
+        engine, session_factory = create_engine_and_session()
         async def _run_seed():
+            import app.models  # ensure all models register on Base.metadata
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
             async with session_factory() as session:
                 await seed_synthetic_db(session)
         asyncio.run(_run_seed())
